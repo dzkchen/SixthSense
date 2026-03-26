@@ -138,6 +138,18 @@ The current app is focused on fast readability:
 - onboarding for first-time use
 - accessibility options like reduced motion and high contrast
 
+## Next Steps
+
+- improve directional accuracy with a better multi-microphone hardware setup
+- replace the phone-based prototype with a more wearable form factor
+- integrate with AR hardware such as Meta glasses or similar smart glasses
+- add sound isolation and classification so the system can distinguish things like sirens, voices, cars, and other important ambient cues
+- make the visualization more customizable for different accessibility needs
+- test in real-world environments like streets, classrooms, and transit
+- expand beyond front/left/right into richer spatial sound mapping
+
+Because this was built during Fraser Hacks in roughly 7 hours, we were not able to implement sound isolation and source classification in time. That is one of the biggest next steps for making SixthSense more useful in real-world situations.
+
 ## Contributors
 
 Based on the git history in this checkout:
