@@ -8,6 +8,7 @@ type SettingsDrawerProps = {
   onClose: () => void;
   reduceAnimations: boolean;
   highContrast: boolean;
+  websocketUrl: string;
   onToggleReduceAnimations: (value: boolean) => void;
   onToggleHighContrast: (value: boolean) => void;
 };
@@ -54,6 +55,7 @@ export function SettingsDrawer({
   onClose,
   reduceAnimations,
   highContrast,
+  websocketUrl,
   onToggleReduceAnimations,
   onToggleHighContrast,
 }: SettingsDrawerProps) {
@@ -124,7 +126,7 @@ export function SettingsDrawer({
                 <div className="rounded-2xl border border-border bg-background p-4">
                   <p className="text-sm text-muted">WebSocket URL</p>
                   <p className="mt-2 break-all font-mono text-sm text-foreground">
-                    ws://localhost:8000/ws/audio-stream
+                    {websocketUrl}
                   </p>
                   <p className="mt-3 text-sm text-muted">
                     Current status:{" "}

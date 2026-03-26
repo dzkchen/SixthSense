@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { resolveAudioWebSocketUrl } from "@/lib/audioWebSocketUrl";
 import type {
   ConnectionStatus,
   SoundEndMessage,
@@ -17,7 +18,6 @@ const MANUAL_SOUND_DURATION_MS = 1200;
 const MAX_TOTAL_INTENSITY_SOUNDS = 3;
 const SIGNAL_DIRECTIONS = [0, 90, 180, 270] as const;
 const WEBSOCKET_TIMEOUT_MS = 2000;
-const WS_URL = "ws://localhost:8000/ws/audio-stream";
 
 type UseSoundStreamOptions = {
   isPaused: boolean;
@@ -28,6 +28,7 @@ type UseSoundStreamResult = {
   connectionStatus: ConnectionStatus;
   totalIntensity: number;
   history: SoundEvent[];
+  websocketUrl: string;
   triggerManualDirection: (direction: number) => void;
 };
 
@@ -105,6 +106,7 @@ export function useSoundStream({
   const [history, setHistory] = useState<SoundEvent[]>([]);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("manual");
+  const websocketUrl = useMemo(() => resolveAudioWebSocketUrl(), []);
 
   const pausedRef = useRef(isPaused);
   const wsRef = useRef<WebSocket | null>(null);
@@ -174,7 +176,14 @@ export function useSoundStream({
   }, [isPaused, processMessage]);
 
   useEffect(() => {
-    const websocket = new WebSocket(WS_URL);
+    let websocket: WebSocket;
+
+    try {
+      websocket = new WebSocket(websocketUrl);
+    } catch {
+      return;
+    }
+
     wsRef.current = websocket;
 
     let didResolveConnection = false;
@@ -198,22 +207,20 @@ export function useSoundStream({
     });
 
     websocket.addEventListener("error", () => {
-      if (!didResolveConnection) {
-        setConnectionStatus("manual");
-      }
+      window.clearTimeout(fallbackToManual);
+      setConnectionStatus("manual");
     });
 
     websocket.addEventListener("close", () => {
-      if (!didResolveConnection) {
-        setConnectionStatus("manual");
-      }
+      window.clearTimeout(fallbackToManual);
+      setConnectionStatus("manual");
     });
 
     return () => {
       window.clearTimeout(fallbackToManual);
       websocket.close();
     };
-  }, [processMessage]);
+  }, [processMessage, websocketUrl]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -303,6 +310,7 @@ export function useSoundStream({
     connectionStatus,
     totalIntensity,
     history,
+    websocketUrl,
     triggerManualDirection,
   };
 }

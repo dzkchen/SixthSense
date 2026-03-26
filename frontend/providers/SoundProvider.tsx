@@ -16,6 +16,7 @@ type SoundContextValue = {
   history: SoundEvent[];
   connectionStatus: ConnectionStatus;
   totalIntensity: number;
+  websocketUrl: string;
   isPaused: boolean;
   setIsPaused: (value: boolean) => void;
   triggerManualDirection: (direction: number) => void;

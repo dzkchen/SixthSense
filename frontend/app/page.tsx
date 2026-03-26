@@ -44,6 +44,7 @@ export default function HomePage() {
     setIsPaused,
     sounds,
     totalIntensity,
+    websocketUrl,
     triggerManualDirection,
   } = useSoundContext();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -106,6 +107,7 @@ export default function HomePage() {
           highContrast={highContrast}
           isOpen={isSettingsOpen}
           reduceAnimations={reduceAnimations}
+          websocketUrl={websocketUrl}
           onClose={() => setIsSettingsOpen(false)}
           onToggleHighContrast={setHighContrast}
           onToggleReduceAnimations={setStoredReduceMotion}
