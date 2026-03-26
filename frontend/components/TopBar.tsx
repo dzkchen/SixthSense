@@ -55,7 +55,7 @@ export function TopBar({
   const router = useRouter();
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4">
+    <header className="flex h-16 items-center justify-between border-b border-border bg-surface px-5">
       <div>
         <p className="text-2xl font-bold tracking-[-0.04em] text-foreground">
           {designTokens.appName}
