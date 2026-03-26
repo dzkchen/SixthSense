@@ -155,6 +155,26 @@
                 display: none;
                 text-align: center;
             }
+
+            .direction-display {
+                padding: 20px;
+                background: #222;
+                border-top: 1px solid #333;
+                color: white;
+                font-size: 48px;
+                text-align: center;
+                min-height: 80px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 20px;
+            }
+
+            .direction-label {
+                font-size: 14px;
+                color: #aaa;
+                margin-top: 10px;
+            }
         </style>
     </head>
     <body>
@@ -225,11 +245,17 @@
                 </button>
             </div>
 
+            <div class="direction-display" id="directionDisplay">
+                <span id="directionArrow">↔️</span>
+                <span class="direction-label" id="directionLabel">Listening...</span>
+            </div>
+
             <div class="info">
                 <strong>Instructions:</strong><br />
                 1. Click "Start Camera" to begin<br />
                 2. Allow camera access when prompted<br />
                 3. Frames stream to your laptop for processing<br />
+                4. Audio direction detected below<br />
                 Status updates appear above
             </div>
         </div>
@@ -461,9 +487,47 @@
                 console.error(message);
             }
 
+            // Direction detection
+            async function updateDirection() {
+                try {
+                    const response = await fetch("/get-direction");
+                    if (response.ok) {
+                        const data = await response.json();
+                        displayDirection(data.direction);
+                    }
+                } catch (error) {
+                    console.error("Direction fetch error:", error);
+                }
+            }
+
+            function displayDirection(direction) {
+                const arrow = document.getElementById("directionArrow");
+                const label = document.getElementById("directionLabel");
+
+                switch (direction) {
+                    case "left":
+                        arrow.textContent = "⬅️";
+                        label.textContent = "LEFT";
+                        break;
+                    case "right":
+                        arrow.textContent = "➡️";
+                        label.textContent = "RIGHT";
+                        break;
+                    case "center":
+                        arrow.textContent = "⬆️";
+                        label.textContent = "CENTER";
+                        break;
+                    default:
+                        arrow.textContent = "↔️";
+                        label.textContent = "Listening...";
+                }
+            }
+
             // Initialize when page loads
             window.addEventListener("load", function () {
                 updateStatus("Ready", "disconnected");
+                // Poll direction every 200ms
+                setInterval(updateDirection, 200);
             });
         </script>
     </body>

@@ -4,12 +4,33 @@ import numpy as np
 from io import BytesIO
 import base64
 import threading
+from intensity import get_audio_direction
 
 app = Flask(__name__)
 
-# Store latest processed frame
+# Store latest processed frame and direction
 latest_frame = None
 latest_frame_lock = threading.Lock()
+latest_direction = "center"
+latest_direction_lock = threading.Lock()
+
+# Background thread for audio detection
+def audio_detection_thread():
+    """Continuously detect audio direction in background"""
+    global latest_direction
+    while True:
+        try:
+            direction = get_audio_direction()
+            if direction:
+                with latest_direction_lock:
+                    latest_direction = direction
+        except Exception as e:
+            print(f"Audio detection error: {e}")
+
+# Start audio detection thread
+import threading
+audio_thread = threading.Thread(target=audio_detection_thread, daemon=True)
+audio_thread.start()
 
 @app.route('/')
 def index():
@@ -52,6 +73,12 @@ def upload_frame():
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/get-direction', methods=['GET'])
+def get_direction():
+    """Get the current detected audio direction"""
+    with latest_direction_lock:
+        return jsonify({'direction': latest_direction}), 200
 
 @app.route('/health', methods=['GET'])
 def health():
