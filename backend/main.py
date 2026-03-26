@@ -17,7 +17,7 @@ HOST = os.getenv("SIXTHSENSE_HOST", "0.0.0.0")
 PORT = int(os.getenv("SIXTHSENSE_PORT", "8000"))
 WS_PATH = "/ws/audio-stream"
 
-DEVICE_INDEX = int(os.getenv("SIXTHSENSE_DEVICE_INDEX", "5"))
+DEVICE_INDEX = int(os.getenv("SIXTHSENSE_DEVICE_INDEX", "3"))
 SAMPLE_RATE = int(os.getenv("SIXTHSENSE_SAMPLE_RATE", "44100"))
 DURATION = float(os.getenv("SIXTHSENSE_CHUNK_DURATION", "0.5"))
 THRESHOLD = float(os.getenv("SIXTHSENSE_SOUND_THRESHOLD", "0.02"))
