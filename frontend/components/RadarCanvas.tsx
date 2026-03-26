@@ -86,7 +86,7 @@ function mixWaveColor(sounds: SoundEvent[], angleDegrees: number, now: number) {
   });
 
   if (totalWeight === 0) {
-    return `rgba(${hexToRgb(soundColors.unknown).r}, ${hexToRgb(soundColors.unknown).g}, ${hexToRgb(soundColors.unknown).b}, 0.16)`;
+    return `rgba(${hexToRgb(soundColors.unknown).r}, ${hexToRgb(soundColors.unknown).g}, ${hexToRgb(soundColors.unknown).b}, 0.24)`;
   }
 
   return `rgba(${Math.round(mixedR / totalWeight)}, ${Math.round(
@@ -290,7 +290,7 @@ export function RadarCanvas({
       context.strokeStyle = designTokens.radar.ringStroke;
       context.lineWidth = 1.5;
       context.globalAlpha =
-        (currentHighContrast ? 0.6 : 0.3) + ambientPresence * 0.04 * ambientBreath;
+        (currentHighContrast ? 0.76 : 0.44) + ambientPresence * 0.05 * ambientBreath;
       [0.33, 0.66, 1].forEach((multiplier) => {
         context.beginPath();
         context.arc(0, 0, radius * multiplier, 0, Math.PI * 2);
@@ -380,11 +380,11 @@ export function RadarCanvas({
           context.lineTo(nextX, nextY);
           context.strokeStyle = `rgba(${ringRgb.r}, ${ringRgb.g}, ${ringRgb.b}, 1)`;
           context.globalAlpha =
-            0.18 +
-            layer * 0.055 +
-            ambientPresence * 0.03 * (0.45 + ambientBreath) -
-            activeVisualWeight * 0.06;
-          context.lineWidth = currentHighContrast ? 2 : 1.35;
+            0.3 +
+            layer * 0.045 +
+            ambientPresence * 0.045 * (0.45 + ambientBreath) -
+            activeVisualWeight * 0.04;
+          context.lineWidth = currentHighContrast ? 2.2 : 1.6;
           context.stroke();
         }
       }
@@ -482,9 +482,9 @@ export function RadarCanvas({
             context.lineTo(nextX, nextY);
             context.strokeStyle = slotColor;
             context.globalAlpha =
-              (0.09 +
-                slotState.strength * 0.18 +
-                (segmentIndex / maxSpokeSegments) * 0.07) *
+              (0.15 +
+                slotState.strength * 0.22 +
+                (segmentIndex / maxSpokeSegments) * 0.08) *
               segmentFill;
             context.lineWidth = spokeThickness;
             context.stroke();
@@ -598,17 +598,14 @@ export function RadarCanvas({
             const nextTheta = directionDegreesToCanvasRadians(nextAngleDegrees);
             const slotState = getWaveState(angleDegrees);
             const nextSlotState = getWaveState(nextAngleDegrees);
-
-            if (slotState.height <= 0.04 && nextSlotState.height <= 0.04) {
-              continue;
-            }
-
             const normalizedHeight = clamp(slotState.height / maxSpokeSegments);
             const nextNormalizedHeight = clamp(
               nextSlotState.height / maxSpokeSegments,
             );
             const waveEnvelope = easeOutCubic(normalizedHeight);
             const nextWaveEnvelope = easeOutCubic(nextNormalizedHeight);
+            const wavePresence = 0.16 + slotState.strength * 0.84;
+            const nextWavePresence = 0.16 + nextSlotState.strength * 0.84;
             const spokeOuterEdge =
               spokeInnerRadius +
               slotState.height * (segmentLength + segmentGap) +
@@ -666,20 +663,28 @@ export function RadarCanvas({
                 layer * waveLayerGap +
                 nextWaveRipple,
             );
-            const x = Math.cos(theta) * waveRadius;
-            const y = Math.sin(theta) * waveRadius;
-            const nextX = Math.cos(nextTheta) * nextWaveRadius;
-            const nextY = Math.sin(nextTheta) * nextWaveRadius;
+            const blendedWaveRadius =
+              waveRadius * wavePresence +
+              (spokeInnerRadius + minimumWaveGap + waveOuterOffset + layer * waveLayerGap) *
+                (1 - wavePresence);
+            const nextBlendedWaveRadius =
+              nextWaveRadius * nextWavePresence +
+              (spokeInnerRadius + minimumWaveGap + waveOuterOffset + layer * waveLayerGap) *
+                (1 - nextWavePresence);
+            const x = Math.cos(theta) * blendedWaveRadius;
+            const y = Math.sin(theta) * blendedWaveRadius;
+            const nextX = Math.cos(nextTheta) * nextBlendedWaveRadius;
+            const nextY = Math.sin(nextTheta) * nextBlendedWaveRadius;
 
             context.beginPath();
             context.moveTo(x, y);
             context.lineTo(nextX, nextY);
             context.strokeStyle = mixWaveColor(currentSounds, angleDegrees, now);
             context.globalAlpha =
-              0.08 +
-              slotState.strength * 0.12 -
-              layer * 0.025;
-            context.lineWidth = currentHighContrast ? 1.9 - layer * 0.2 : 1.3 - layer * 0.14;
+              0.12 +
+              slotState.strength * 0.16 -
+              layer * 0.02;
+            context.lineWidth = currentHighContrast ? 2.1 - layer * 0.18 : 1.55 - layer * 0.12;
             context.stroke();
           }
         }
