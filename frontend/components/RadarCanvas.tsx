@@ -559,14 +559,19 @@ export function RadarCanvas({
 
         context.lineCap = "round";
 
-        const waveSteps = 144;
+        const waveSteps = 180;
+        const minimumWaveGap = radius * 0.05;
+        const waveOuterOffset = radius * 0.09;
+        const waveLayerGap = 6;
         const getWaveState = (angleDegrees: number) => {
           const samples = [
-            { offset: -12, weight: 1 },
-            { offset: -6, weight: 2 },
-            { offset: 0, weight: 3 },
-            { offset: 6, weight: 2 },
-            { offset: 12, weight: 1 },
+            { offset: -24, weight: 1 },
+            { offset: -16, weight: 2 },
+            { offset: -8, weight: 3 },
+            { offset: 0, weight: 4 },
+            { offset: 8, weight: 3 },
+            { offset: 16, weight: 2 },
+            { offset: 24, weight: 1 },
           ] as const;
           let weightedHeight = 0;
           let weightedStrength = 0;
@@ -598,32 +603,69 @@ export function RadarCanvas({
               continue;
             }
 
-            const waveRadius =
+            const normalizedHeight = clamp(slotState.height / maxSpokeSegments);
+            const nextNormalizedHeight = clamp(
+              nextSlotState.height / maxSpokeSegments,
+            );
+            const waveEnvelope = easeOutCubic(normalizedHeight);
+            const nextWaveEnvelope = easeOutCubic(nextNormalizedHeight);
+            const spokeOuterEdge =
               spokeInnerRadius +
               slotState.height * (segmentLength + segmentGap) +
-              segmentLength * 0.95 +
-              radius * 0.008 +
-              layer * 3.2 +
-              (currentReduceAnimations
-                ? 0
-                : Math.sin(theta * 6 + ambientPhase * 1.35 + layer * 0.6) *
-                  radius *
-                  0.0026 *
-                  slotState.strength);
-            const nextWaveRadius =
+              segmentLength;
+            const nextSpokeOuterEdge =
               spokeInnerRadius +
               nextSlotState.height * (segmentLength + segmentGap) +
-              segmentLength * 0.95 +
-              radius * 0.008 +
-              layer * 3.2 +
-              (currentReduceAnimations
+              segmentLength;
+            const contourLift = radius * (0.01 + waveEnvelope * 0.012);
+            const nextContourLift =
+              radius * (0.01 + nextWaveEnvelope * 0.012);
+            const waveRipple =
+              currentReduceAnimations
+                ? 0
+                : Math.sin(theta * 3 + ambientPhase * 1.08 + layer * 0.72) *
+                    radius *
+                    (0.008 + waveEnvelope * 0.01) +
+                  Math.sin(theta * 6 - ambientPhase * 0.65 + layer * 0.38) *
+                    radius *
+                    0.0035;
+            const nextWaveRipple =
+              currentReduceAnimations
                 ? 0
                 : Math.sin(
-                    nextTheta * 6 + ambientPhase * 1.35 + layer * 0.6,
+                    nextTheta * 3 + ambientPhase * 1.08 + layer * 0.72,
                   ) *
-                  radius *
-                  0.0026 *
-                  nextSlotState.strength);
+                    radius *
+                    (0.008 + nextWaveEnvelope * 0.01) +
+                  Math.sin(
+                    nextTheta * 6 - ambientPhase * 0.65 + layer * 0.38,
+                  ) *
+                    radius *
+                    0.0035;
+            const minimumWaveRadius =
+              spokeOuterEdge +
+              minimumWaveGap +
+              layer * waveLayerGap;
+            const nextMinimumWaveRadius =
+              nextSpokeOuterEdge +
+              minimumWaveGap +
+              layer * waveLayerGap;
+            const waveRadius = Math.max(
+              minimumWaveRadius,
+              spokeOuterEdge +
+                waveOuterOffset +
+                contourLift +
+                layer * waveLayerGap +
+                waveRipple,
+            );
+            const nextWaveRadius = Math.max(
+              nextMinimumWaveRadius,
+              nextSpokeOuterEdge +
+                waveOuterOffset +
+                nextContourLift +
+                layer * waveLayerGap +
+                nextWaveRipple,
+            );
             const x = Math.cos(theta) * waveRadius;
             const y = Math.sin(theta) * waveRadius;
             const nextX = Math.cos(nextTheta) * nextWaveRadius;
