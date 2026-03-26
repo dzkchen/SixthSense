@@ -1,86 +1,265 @@
-import sounddevice as sd
+from __future__ import annotations
+
+import asyncio
+import os
+import threading
+import time
+from contextlib import asynccontextmanager
+from typing import Any
+
 import numpy as np
+import sounddevice as sd
+import uvicorn
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from scipy.signal import correlate
 
-# ===== CONFIG =====
-DEVICE_INDEX = 5        # Your "3 Mics" aggregate device
-SAMPLE_RATE = 44100     # More stable than 16kHz for AirPods
-DURATION = 0.5          # seconds per recording
-THRESHOLD = 0.02        # volume threshold for detecting sound
-MIN_DELAY_SAMPLES = 3   # ignore tiny noise delays
+HOST = os.getenv("SIXTHSENSE_HOST", "0.0.0.0")
+PORT = int(os.getenv("SIXTHSENSE_PORT", "8000"))
+WS_PATH = "/ws/audio-stream"
 
-# ==================
+DEVICE_INDEX = int(os.getenv("SIXTHSENSE_DEVICE_INDEX", "5"))
+SAMPLE_RATE = int(os.getenv("SIXTHSENSE_SAMPLE_RATE", "44100"))
+DURATION = float(os.getenv("SIXTHSENSE_CHUNK_DURATION", "0.5"))
+THRESHOLD = float(os.getenv("SIXTHSENSE_SOUND_THRESHOLD", "0.02"))
+MIN_DELAY_SAMPLES = int(os.getenv("SIXTHSENSE_MIN_DELAY_SAMPLES", "3"))
+SILENCE_TIMEOUT_MS = int(os.getenv("SIXTHSENSE_SILENCE_TIMEOUT_MS", "1200"))
 
-def get_delay(sig1, sig2):
-    corr = correlate(sig1, sig2, mode='full')
-    delay = np.argmax(corr) - (len(sig1) - 1)
-    return delay
+SOUND_ID = "microphone-primary"
+SOUND_LABEL = "unknown"
 
-def detect_direction(audio, sample_rate):
-    # Use first two channels for now
-    left = audio[:, 0]
-    right = audio[:, 1]
 
-    # Normalize (avoid division by zero)
-    left = left / (np.max(np.abs(left)) + 1e-6)
-    right = right / (np.max(np.abs(right)) + 1e-6)
+def clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
 
-    delay_samples = get_delay(left, right)
+
+def get_delay(left_channel: np.ndarray, right_channel: np.ndarray) -> int:
+    correlation = correlate(left_channel, right_channel, mode="full")
+    return int(np.argmax(correlation) - (len(left_channel) - 1))
+
+
+def normalize_channel(channel: np.ndarray) -> np.ndarray:
+    peak = np.max(np.abs(channel)) + 1e-6
+    return channel / peak
+
+
+def detect_direction(audio: np.ndarray, sample_rate: int) -> tuple[int, float]:
+    if audio.ndim != 2 or audio.shape[1] < 2:
+        return 0, 0.0
+
+    left_channel = normalize_channel(audio[:, 0])
+    right_channel = normalize_channel(audio[:, 1])
+
+    delay_samples = get_delay(left_channel, right_channel)
     delay_time = delay_samples / sample_rate
 
-    # Direction logic with noise tolerance
     if delay_samples > MIN_DELAY_SAMPLES:
-        direction = "RIGHT →"
-    elif delay_samples < -MIN_DELAY_SAMPLES:
-        direction = "← LEFT"
-    else:
-        direction = "CENTER ↑"
+        return 90, delay_time
 
-    return delay_samples, delay_time, direction
+    if delay_samples < -MIN_DELAY_SAMPLES:
+        return 270, delay_time
 
-
-# ===== SETUP =====
-device_info = sd.query_devices(DEVICE_INDEX)
-channels = device_info['max_input_channels']
-
-print("🎤 Device:", device_info['name'])
-print(f"Using {channels} input channels")
-print(f"Sample Rate: {SAMPLE_RATE} Hz")
-print("\nClap or tap near a mic to test direction...\n")
+    return 0, delay_time
 
 
-# ===== MAIN LOOP =====
-while True:
-    audio = sd.rec(
-        int(DURATION * SAMPLE_RATE),
-        samplerate=SAMPLE_RATE,
-        channels=channels,
-        device=DEVICE_INDEX,
-        dtype='float32'
-    )
-    sd.wait()
+def volume_to_intensity(volume: float) -> float:
+    normalized = (volume - THRESHOLD) / max(THRESHOLD * 6, 1e-6)
+    return clamp(normalized, 0.0, 1.0)
 
-    # Debug: confirm shape
-    print("Shape:", audio.shape)
 
-    # Check overall volume
-    volume = np.max(np.abs(audio))
+class ConnectionManager:
+    def __init__(self) -> None:
+        self.connections: set[WebSocket] = set()
 
-    if volume > THRESHOLD:
-        print("🔊 Sound detected!")
+    async def connect(self, websocket: WebSocket) -> None:
+        await websocket.accept()
+        self.connections.add(websocket)
 
-        # Debug: show per-channel loudness
-        channel_levels = np.max(np.abs(audio), axis=0)
-        channel_levels[1] = channel_levels[1] * 10
-        print("Channel levels:", channel_levels)
+    async def disconnect(self, websocket: WebSocket) -> None:
+        self.connections.discard(websocket)
 
-        # Only run direction if we have at least 2 channels
-        if channels >= 2:
-            delay_samples, delay_time, direction = detect_direction(audio, SAMPLE_RATE)
+    async def broadcast(self, message: dict[str, Any]) -> None:
+        stale_connections: list[WebSocket] = []
+        for websocket in list(self.connections):
+            try:
+                await websocket.send_json(message)
+            except Exception:
+                stale_connections.append(websocket)
 
-            print(f"Delay: {delay_samples} samples ({delay_time*1000:.3f} ms)")
-            print(f"Direction: {direction}")
-        else:
-            print("Not enough channels for direction detection")
+        for websocket in stale_connections:
+            await self.disconnect(websocket)
 
-        print("-" * 50)
+    async def count(self) -> int:
+        return len(self.connections)
+
+
+class AudioStreamWorker:
+    def __init__(self, manager: ConnectionManager, loop: asyncio.AbstractEventLoop) -> None:
+        self.manager = manager
+        self.loop = loop
+        self.stop_event = threading.Event()
+        self.thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self.thread is not None:
+            return
+
+        self.thread = threading.Thread(target=self.run, name="audio-stream-worker", daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        try:
+            sd.stop()
+        except Exception:
+            pass
+
+        if self.thread is not None:
+            self.thread.join(timeout=DURATION + 1)
+            self.thread = None
+
+    def publish(self, message: dict[str, Any]) -> None:
+        if self.loop.is_closed():
+            return
+
+        future = asyncio.run_coroutine_threadsafe(
+            self.manager.broadcast(message),
+            self.loop,
+        )
+
+        try:
+            future.result(timeout=1)
+        except Exception:
+            pass
+
+    def run(self) -> None:
+        try:
+            device_info = sd.query_devices(DEVICE_INDEX)
+            channel_count = int(device_info["max_input_channels"])
+        except Exception as error:
+            print(f"Failed to initialize audio device {DEVICE_INDEX}: {error}")
+            return
+
+        if channel_count <= 0:
+            print(f"Audio device {DEVICE_INDEX} has no input channels.")
+            return
+
+        print("SixthSense audio stream server")
+        print(f"Device: {device_info['name']}")
+        print(f"Input channels: {channel_count}")
+        print(f"Sample rate: {SAMPLE_RATE} Hz")
+        print(f"WebSocket path: {WS_PATH}")
+
+        is_sound_active = False
+        sound_started_at: int | None = None
+        last_detected_at: int | None = None
+
+        while not self.stop_event.is_set():
+            try:
+                audio = sd.rec(
+                    int(DURATION * SAMPLE_RATE),
+                    samplerate=SAMPLE_RATE,
+                    channels=channel_count,
+                    device=DEVICE_INDEX,
+                    dtype="float32",
+                )
+                sd.wait()
+            except Exception as error:
+                print(f"Audio capture error: {error}")
+                time.sleep(0.5)
+                continue
+
+            if self.stop_event.is_set():
+                break
+
+            volume = float(np.max(np.abs(audio)))
+            now = int(time.time() * 1000)
+
+            if volume > THRESHOLD:
+                if not is_sound_active or sound_started_at is None:
+                    sound_started_at = now
+
+                direction, delay_time = detect_direction(audio, SAMPLE_RATE)
+                intensity = volume_to_intensity(volume)
+                last_detected_at = now
+                is_sound_active = True
+
+                print(
+                    f"sound_update volume={volume:.4f} intensity={intensity:.2f} "
+                    f"direction={direction} delay_ms={delay_time * 1000:.3f}",
+                )
+
+                self.publish(
+                    {
+                        "type": "sound_update",
+                        "sound": {
+                            "id": SOUND_ID,
+                            "direction": direction,
+                            "intensity": intensity,
+                            "label": SOUND_LABEL,
+                            "startedAt": sound_started_at,
+                            "lastSeenAt": now,
+                            "isActive": True,
+                        },
+                    },
+                )
+                continue
+
+            if (
+                is_sound_active
+                and last_detected_at is not None
+                and now - last_detected_at >= SILENCE_TIMEOUT_MS
+            ):
+                print("sound_end")
+                self.publish({"type": "sound_end", "id": SOUND_ID})
+                is_sound_active = False
+                sound_started_at = None
+                last_detected_at = None
+
+
+manager = ConnectionManager()
+worker: AudioStreamWorker | None = None
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global worker
+
+    loop = asyncio.get_running_loop()
+    worker = AudioStreamWorker(manager, loop)
+    worker.start()
+
+    try:
+        yield
+    finally:
+        if worker is not None:
+            worker.stop()
+            worker = None
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/health")
+async def health() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "websocketPath": WS_PATH,
+        "connections": await manager.count(),
+    }
+
+
+@app.websocket(WS_PATH)
+async def audio_stream(websocket: WebSocket) -> None:
+    await manager.connect(websocket)
+
+    try:
+        while True:
+            await websocket.receive()
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket)
+    except Exception:
+        await manager.disconnect(websocket)
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host=HOST, port=PORT)
