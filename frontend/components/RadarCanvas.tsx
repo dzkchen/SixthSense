@@ -9,7 +9,6 @@ import type { SoundEvent } from "@/types/sound";
 type RadarCanvasProps = {
   sounds: SoundEvent[];
   totalIntensity: number;
-  isPaused: boolean;
   highContrast: boolean;
   reduceAnimations: boolean;
 };
@@ -116,7 +115,6 @@ function dominantSoundColor(sounds: SoundEvent[], now: number) {
 export function RadarCanvas({
   sounds,
   totalIntensity,
-  isPaused,
   highContrast,
   reduceAnimations,
 }: RadarCanvasProps) {
@@ -124,7 +122,6 @@ export function RadarCanvas({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const propsRef = useRef<RadarCanvasProps>({
     highContrast,
-    isPaused,
     reduceAnimations,
     sounds,
     totalIntensity,
@@ -136,12 +133,11 @@ export function RadarCanvas({
   useEffect(() => {
     propsRef.current = {
       highContrast,
-      isPaused,
       reduceAnimations,
       sounds,
       totalIntensity,
     };
-  }, [highContrast, isPaused, reduceAnimations, sounds, totalIntensity]);
+  }, [highContrast, reduceAnimations, sounds, totalIntensity]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -175,7 +171,6 @@ export function RadarCanvas({
     const drawFrame = () => {
       const {
         highContrast: currentHighContrast,
-        isPaused: currentIsPaused,
         reduceAnimations: currentReduceAnimations,
         sounds: currentSounds,
         totalIntensity: currentTotalIntensity,
@@ -535,13 +530,6 @@ export function RadarCanvas({
         context.strokeStyle = `rgba(239, 68, 68, ${flashOpacityRef.current})`;
         context.lineWidth = 8;
         context.strokeRect(-width / 2 + 8, -height / 2 + 8, width - 16, height - 16);
-      }
-
-      if (currentIsPaused) {
-        context.fillStyle = designTokens.colors.muted;
-        context.font = "700 12px var(--font-inter)";
-        context.textAlign = "center";
-        context.fillText("PAUSED", 0, -height / 2 + 24);
       }
 
       context.restore();

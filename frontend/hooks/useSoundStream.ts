@@ -19,10 +19,6 @@ const SIGNAL_DIRECTIONS = [0, 90, 180, 270] as const;
 const WEBSOCKET_TIMEOUT_MS = 2000;
 const WS_URL = "ws://localhost:8000/ws/audio-stream";
 
-type UseSoundStreamOptions = {
-  isPaused: boolean;
-};
-
 type UseSoundStreamResult = {
   sounds: SoundEvent[];
   connectionStatus: ConnectionStatus;
@@ -87,28 +83,13 @@ function markSoundEnded(currentSounds: SoundEvent[], id: string) {
   );
 }
 
-function getLatestBufferedMessages(buffer: SoundMessage[]) {
-  const latestById = new Map<string, SoundMessage>();
-
-  for (const message of buffer) {
-    const id = message.type === "sound_update" ? message.sound.id : message.id;
-    latestById.set(id, message);
-  }
-
-  return [...latestById.values()];
-}
-
-export function useSoundStream({
-  isPaused,
-}: UseSoundStreamOptions): UseSoundStreamResult {
+export function useSoundStream(): UseSoundStreamResult {
   const [sounds, setSounds] = useState<SoundEvent[]>([]);
   const [history, setHistory] = useState<SoundEvent[]>([]);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("manual");
 
-  const pausedRef = useRef(isPaused);
   const wsRef = useRef<WebSocket | null>(null);
-  const messageBufferRef = useRef<SoundMessage[]>([]);
   const manualTimeoutsRef = useRef<Map<number, number>>(new Map());
 
   const syncSounds = useCallback(
@@ -148,11 +129,6 @@ export function useSoundStream({
 
   const processMessage = useCallback(
     (message: SoundMessage) => {
-      if (pausedRef.current) {
-        messageBufferRef.current.push(message);
-        return;
-      }
-
       if (message.type === "sound_update") {
         processUpdate(message);
         return;
@@ -162,16 +138,6 @@ export function useSoundStream({
     },
     [processEnd, processUpdate],
   );
-
-  useEffect(() => {
-    pausedRef.current = isPaused;
-
-    if (!isPaused && messageBufferRef.current.length > 0) {
-      const bufferedMessages = getLatestBufferedMessages(messageBufferRef.current);
-      messageBufferRef.current = [];
-      bufferedMessages.forEach(processMessage);
-    }
-  }, [isPaused, processMessage]);
 
   useEffect(() => {
     const websocket = new WebSocket(WS_URL);

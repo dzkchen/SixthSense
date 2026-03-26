@@ -7,7 +7,7 @@ const LEGEND_ITEMS = [
   { label: "Unknown", tone: soundColors.unknown },
 ] as const;
 
-/** Shows the sound color legend and the tap-to-freeze instruction strip. */
+/** Shows the sound color legend and the manual direction hint. */
 export function LegendBar() {
   return (
     <section className="flex h-20 flex-col justify-center border-t border-border bg-surface">
@@ -27,7 +27,7 @@ export function LegendBar() {
         ))}
       </div>
       <p className="px-4 text-sm text-muted">
-        Use the direction buttons to simulate sound · Tap the radar to freeze
+        Use the direction buttons to simulate sound
       </p>
     </section>
   );

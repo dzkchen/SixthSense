@@ -4,7 +4,6 @@ import {
   createContext,
   useContext,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
 
@@ -16,8 +15,6 @@ type SoundContextValue = {
   history: SoundEvent[];
   connectionStatus: ConnectionStatus;
   totalIntensity: number;
-  isPaused: boolean;
-  setIsPaused: (value: boolean) => void;
   triggerManualDirection: (direction: number) => void;
 };
 
@@ -25,16 +22,11 @@ const SoundContext = createContext<SoundContextValue | null>(null);
 
 /** Provides shared sound state so radar and history stay in sync across routes. */
 export function SoundProvider({ children }: { children: ReactNode }) {
-  const [isPaused, setIsPaused] = useState(false);
-  const soundStream = useSoundStream({ isPaused });
+  const soundStream = useSoundStream();
 
   const value = useMemo<SoundContextValue>(
-    () => ({
-      ...soundStream,
-      isPaused,
-      setIsPaused,
-    }),
-    [isPaused, soundStream],
+    () => soundStream,
+    [soundStream],
   );
 
   return <SoundContext.Provider value={value}>{children}</SoundContext.Provider>;

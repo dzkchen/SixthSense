@@ -36,12 +36,10 @@ const DIRECTION_BUTTONS = [
   },
 ] as const;
 
-/** Renders the live radar workspace with pause, settings, and onboarding overlays. */
+/** Renders the live radar workspace with settings and onboarding overlays. */
 export default function HomePage() {
   const {
     connectionStatus,
-    isPaused,
-    setIsPaused,
     sounds,
     totalIntensity,
     triggerManualDirection,
@@ -72,20 +70,14 @@ export default function HomePage() {
         <main className="flex flex-1 items-center justify-center overflow-hidden px-4 py-3">
           <div className="flex h-full w-full items-center justify-center">
             <div className="relative inline-flex items-center justify-center">
-              <button
-                aria-label={isPaused ? "Resume radar" : "Pause radar"}
-                className="flex items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
-                type="button"
-                onClick={() => setIsPaused(!isPaused)}
-              >
+              <div className="flex items-center justify-center">
                 <RadarCanvas
                   highContrast={highContrast}
-                  isPaused={isPaused}
                   reduceAnimations={reduceAnimations}
                   sounds={sounds}
                   totalIntensity={totalIntensity}
                 />
-              </button>
+              </div>
               {DIRECTION_BUTTONS.map((button) => (
                 <button
                   key={button.label}
