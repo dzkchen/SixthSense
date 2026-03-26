@@ -62,7 +62,8 @@ export default function HomePage() {
     connectionStatus,
     sounds,
     totalIntensity,
-    triggerManualDirection,
+    startManualDirection,
+    stopManualDirection,
   } = useSoundContext();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [hasOnboarded, setHasOnboarded, onboardingReady] = useStoredBoolean(
@@ -104,7 +105,34 @@ export default function HomePage() {
                   aria-label={`Simulate ${button.label.toLowerCase()} audio`}
                   className={`absolute z-10 rounded-full border border-border/90 bg-surface/95 px-2.5 py-1.5 text-[11px] font-semibold text-foreground shadow-[0_8px_24px_rgba(13,13,13,0.08)] backdrop-blur-sm transition hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground sm:px-3 sm:text-sm ${button.positionClassName}`}
                   type="button"
-                  onClick={() => triggerManualDirection(button.direction)}
+                  onBlur={() => stopManualDirection(button.direction)}
+                  onKeyDown={(event) => {
+                    if (
+                      (event.key === "Enter" || event.key === " ") &&
+                      !event.repeat
+                    ) {
+                      event.preventDefault();
+                      startManualDirection(button.direction);
+                    }
+                  }}
+                  onKeyUp={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      stopManualDirection(button.direction);
+                    }
+                  }}
+                  onPointerCancel={() => stopManualDirection(button.direction)}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    startManualDirection(button.direction);
+                  }}
+                  onPointerUp={(event) => {
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                      event.currentTarget.releasePointerCapture(event.pointerId);
+                    }
+                    stopManualDirection(button.direction);
+                  }}
                 >
                   {button.label}
                 </button>

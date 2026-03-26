@@ -15,7 +15,8 @@ type SoundContextValue = {
   history: SoundEvent[];
   connectionStatus: ConnectionStatus;
   totalIntensity: number;
-  triggerManualDirection: (direction: number) => void;
+  startManualDirection: (direction: number) => void;
+  stopManualDirection: (direction: number) => void;
 };
 
 const SoundContext = createContext<SoundContextValue | null>(null);

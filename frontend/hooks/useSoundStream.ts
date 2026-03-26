@@ -13,7 +13,10 @@ import type {
 const CLEANUP_INTERVAL_MS = 200;
 const END_FADE_DURATION_MS = 1500;
 const EXPIRY_TIMEOUT_MS = 4000;
-const MANUAL_SOUND_DURATION_MS = 1200;
+const MANUAL_HOLD_RAMP_DURATION_MS = 1800;
+const MANUAL_HOLD_TICK_MS = 80;
+const MANUAL_MIN_INTENSITY = 0.22;
+const MANUAL_MAX_INTENSITY = 1;
 const MAX_TOTAL_INTENSITY_SOUNDS = 3;
 const SIGNAL_DIRECTIONS = [0, 45, 90, 135, 180, 225, 270, 315] as const;
 const WEBSOCKET_TIMEOUT_MS = 2000;
@@ -24,11 +27,42 @@ type UseSoundStreamResult = {
   connectionStatus: ConnectionStatus;
   totalIntensity: number;
   history: SoundEvent[];
-  triggerManualDirection: (direction: number) => void;
+  startManualDirection: (direction: number) => void;
+  stopManualDirection: (direction: number) => void;
+};
+
+type ManualHoldState = {
+  intervalId: number;
+  startedAt: number;
 };
 
 function clampIntensity(value: number) {
   return Math.max(0, Math.min(1, value));
+}
+
+function getSoundIntensityContribution(sound: SoundEvent, now: number) {
+  if (sound.isActive) {
+    return sound.intensity;
+  }
+
+  const fadeProgress = Math.max(
+    0,
+    1 - (now - sound.lastSeenAt) / END_FADE_DURATION_MS,
+  );
+
+  return sound.intensity * fadeProgress;
+}
+
+function getManualHoldIntensity(startedAt: number, now: number) {
+  const progress = Math.min(
+    1,
+    Math.max(0, (now - startedAt) / MANUAL_HOLD_RAMP_DURATION_MS),
+  );
+
+  return clampIntensity(
+    MANUAL_MIN_INTENSITY +
+      progress * (MANUAL_MAX_INTENSITY - MANUAL_MIN_INTENSITY),
+  );
 }
 
 function snapToSignalDirection(direction: number) {
@@ -86,11 +120,12 @@ function markSoundEnded(currentSounds: SoundEvent[], id: string) {
 export function useSoundStream(): UseSoundStreamResult {
   const [sounds, setSounds] = useState<SoundEvent[]>([]);
   const [history, setHistory] = useState<SoundEvent[]>([]);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("manual");
 
   const wsRef = useRef<WebSocket | null>(null);
-  const manualTimeoutsRef = useRef<Map<number, number>>(new Map());
+  const manualHoldsRef = useRef<Map<number, ManualHoldState>>(new Map());
 
   const syncSounds = useCallback(
     (updater: (previous: SoundEvent[]) => SoundEvent[]) => {
@@ -184,6 +219,7 @@ export function useSoundStream(): UseSoundStreamResult {
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       const now = Date.now();
+      setCurrentTime(now);
 
       syncSounds((previous) =>
         previous
@@ -210,65 +246,91 @@ export function useSoundStream(): UseSoundStreamResult {
 
   useEffect(
     () => () => {
-      manualTimeoutsRef.current.forEach((timeoutId) =>
-        window.clearTimeout(timeoutId),
+      manualHoldsRef.current.forEach((holdState) =>
+        window.clearInterval(holdState.intervalId),
       );
-      manualTimeoutsRef.current.clear();
+      manualHoldsRef.current.clear();
     },
     [],
   );
 
-  const triggerManualDirection = useCallback(
-    (direction: number) => {
+  const emitManualDirectionUpdate = useCallback(
+    (direction: number, startedAt: number) => {
       const now = Date.now();
       const snappedDirection = snapToSignalDirection(direction);
-      const soundId = `manual-${snappedDirection}`;
 
       processMessage({
         type: "sound_update",
         sound: {
-          id: soundId,
+          id: `manual-${snappedDirection}`,
           direction: snappedDirection,
-          intensity: 0.9,
+          intensity: getManualHoldIntensity(startedAt, now),
           isActive: true,
           label: "unknown",
           lastSeenAt: now,
-          startedAt: now,
+          startedAt,
         },
       });
+    },
+    [processMessage],
+  );
 
-      const existingTimeout = manualTimeoutsRef.current.get(snappedDirection);
-      if (existingTimeout) {
-        window.clearTimeout(existingTimeout);
+  const startManualDirection = useCallback(
+    (direction: number) => {
+      const snappedDirection = snapToSignalDirection(direction);
+
+      if (manualHoldsRef.current.has(snappedDirection)) {
+        return;
       }
 
-      const timeoutId = window.setTimeout(() => {
-        processMessage({ type: "sound_end", id: soundId });
-        manualTimeoutsRef.current.delete(snappedDirection);
-      }, MANUAL_SOUND_DURATION_MS);
+      const startedAt = Date.now();
+      emitManualDirectionUpdate(snappedDirection, startedAt);
 
-      manualTimeoutsRef.current.set(snappedDirection, timeoutId);
+      const intervalId = window.setInterval(() => {
+        emitManualDirectionUpdate(snappedDirection, startedAt);
+      }, MANUAL_HOLD_TICK_MS);
+
+      manualHoldsRef.current.set(snappedDirection, {
+        intervalId,
+        startedAt,
+      });
+    },
+    [emitManualDirectionUpdate],
+  );
+
+  const stopManualDirection = useCallback(
+    (direction: number) => {
+      const snappedDirection = snapToSignalDirection(direction);
+      const activeHold = manualHoldsRef.current.get(snappedDirection);
+
+      if (!activeHold) {
+        return;
+      }
+
+      window.clearInterval(activeHold.intervalId);
+      manualHoldsRef.current.delete(snappedDirection);
+      processMessage({
+        type: "sound_end",
+        id: `manual-${snappedDirection}`,
+      });
     },
     [processMessage],
   );
 
   const totalIntensity = useMemo(() => {
     const rawSum = sounds.reduce((sum, sound) => {
-      if (!sound.isActive) {
-        return sum;
-      }
-
-      return sum + sound.intensity;
+      return sum + getSoundIntensityContribution(sound, currentTime);
     }, 0);
 
     return Math.min(1, rawSum / MAX_TOTAL_INTENSITY_SOUNDS);
-  }, [sounds]);
+  }, [currentTime, sounds]);
 
   return {
     sounds,
     connectionStatus,
     totalIntensity,
     history,
-    triggerManualDirection,
+    startManualDirection,
+    stopManualDirection,
   };
 }

@@ -27,7 +27,7 @@ export function LegendBar() {
         ))}
       </div>
       <p className="px-4 text-sm text-muted">
-        Use the direction buttons to simulate sound from any angle
+        Press and hold a direction button to raise intensity
       </p>
     </section>
   );
