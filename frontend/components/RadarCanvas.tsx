@@ -557,6 +557,91 @@ export function RadarCanvas({
           });
         }
 
+        context.lineCap = "round";
+
+        const waveSteps = 144;
+        const getWaveState = (angleDegrees: number) => {
+          const samples = [
+            { offset: -12, weight: 1 },
+            { offset: -6, weight: 2 },
+            { offset: 0, weight: 3 },
+            { offset: 6, weight: 2 },
+            { offset: 12, weight: 1 },
+          ] as const;
+          let weightedHeight = 0;
+          let weightedStrength = 0;
+          let totalWeight = 0;
+
+          samples.forEach((sample) => {
+            const slotState = getSlotState(angleDegrees + sample.offset);
+            weightedHeight += slotState.height * sample.weight;
+            weightedStrength += slotState.strength * sample.weight;
+            totalWeight += sample.weight;
+          });
+
+          return {
+            height: weightedHeight / totalWeight,
+            strength: weightedStrength / totalWeight,
+          };
+        };
+
+        for (let layer = 0; layer < 2; layer += 1) {
+          for (let step = 0; step < waveSteps; step += 1) {
+            const angleDegrees = (step / waveSteps) * 360;
+            const nextAngleDegrees = ((step + 1) / waveSteps) * 360;
+            const theta = directionDegreesToCanvasRadians(angleDegrees);
+            const nextTheta = directionDegreesToCanvasRadians(nextAngleDegrees);
+            const slotState = getWaveState(angleDegrees);
+            const nextSlotState = getWaveState(nextAngleDegrees);
+
+            if (slotState.height <= 0.04 && nextSlotState.height <= 0.04) {
+              continue;
+            }
+
+            const waveRadius =
+              spokeInnerRadius +
+              slotState.height * (segmentLength + segmentGap) +
+              segmentLength * 0.95 +
+              radius * 0.008 +
+              layer * 3.2 +
+              (currentReduceAnimations
+                ? 0
+                : Math.sin(theta * 6 + ambientPhase * 1.35 + layer * 0.6) *
+                  radius *
+                  0.0026 *
+                  slotState.strength);
+            const nextWaveRadius =
+              spokeInnerRadius +
+              nextSlotState.height * (segmentLength + segmentGap) +
+              segmentLength * 0.95 +
+              radius * 0.008 +
+              layer * 3.2 +
+              (currentReduceAnimations
+                ? 0
+                : Math.sin(
+                    nextTheta * 6 + ambientPhase * 1.35 + layer * 0.6,
+                  ) *
+                  radius *
+                  0.0026 *
+                  nextSlotState.strength);
+            const x = Math.cos(theta) * waveRadius;
+            const y = Math.sin(theta) * waveRadius;
+            const nextX = Math.cos(nextTheta) * nextWaveRadius;
+            const nextY = Math.sin(nextTheta) * nextWaveRadius;
+
+            context.beginPath();
+            context.moveTo(x, y);
+            context.lineTo(nextX, nextY);
+            context.strokeStyle = mixWaveColor(currentSounds, angleDegrees, now);
+            context.globalAlpha =
+              0.08 +
+              slotState.strength * 0.12 -
+              layer * 0.025;
+            context.lineWidth = currentHighContrast ? 1.9 - layer * 0.2 : 1.3 - layer * 0.14;
+            context.stroke();
+          }
+        }
+
         if (newestSpokeSource) {
           const newestTheta = directionDegreesToCanvasRadians(
             newestSpokeSource.sound.direction,
