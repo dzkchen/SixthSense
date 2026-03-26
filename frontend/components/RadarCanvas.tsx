@@ -13,7 +13,7 @@ type RadarCanvasProps = {
   reduceAnimations: boolean;
 };
 
-const ACTIVE_PEAK_INTRO_MS = 260;
+const ACTIVE_PULSE_BURST_MS = 250;
 
 function directionDegreesToCanvasRadians(directionDegrees: number) {
   return ((directionDegrees - 90) * Math.PI) / 180;
@@ -35,20 +35,20 @@ function clamp(value: number, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
 }
 
-function easeOutBack(value: number) {
-  const c1 = 1.15;
-  const c3 = c1 + 1;
-  const shiftedValue = value - 1;
-
-  return 1 + c3 * shiftedValue ** 3 + c1 * shiftedValue ** 2;
+function easeOutCubic(value: number) {
+  return 1 - (1 - value) ** 3;
 }
 
-function getElasticIntroProgress(startedAt: number, now: number, reduceAnimations: boolean) {
+function getBurstWindowProgress(
+  startedAt: number,
+  now: number,
+  reduceAnimations: boolean,
+) {
   if (reduceAnimations) {
     return 1;
   }
 
-  return easeOutBack(clamp((now - startedAt) / ACTIVE_PEAK_INTRO_MS));
+  return clamp((now - startedAt) / ACTIVE_PULSE_BURST_MS);
 }
 
 function hexToRgb(hex: string) {
@@ -200,57 +200,68 @@ export function RadarCanvas({
       const activeVisualWeight = dominantSound
         ? Math.max(0, Math.min(1, getSoundVisualWeight(dominantSound, now)))
         : 0;
-      const renderableSounds = currentSounds
-        .map((sound) => {
-          const visualWeight = getSoundVisualWeight(sound, now);
+      const activeSources = currentSounds.flatMap((sound) => {
+        const visualWeight = clamp(getSoundVisualWeight(sound, now));
 
-          if (visualWeight <= 0.02) {
-            return null;
-          }
+        if (visualWeight <= 0.02) {
+          return [];
+        }
 
-          return {
+        const burstWindowProgress = getBurstWindowProgress(
+          sound.startedAt,
+          now,
+          currentReduceAnimations,
+        );
+
+        return [
+          {
+            burstEnvelope: currentReduceAnimations
+              ? 0
+              : Math.sin(burstWindowProgress * Math.PI),
+            burstWindowProgress,
             color: hexToRgb(soundColors[sound.label]),
-            introProgress: getElasticIntroProgress(
-              sound.startedAt,
-              now,
-              currentReduceAnimations,
-            ),
+            settledProgress: currentReduceAnimations
+              ? 1
+              : easeOutCubic(burstWindowProgress),
             sound,
-            visualWeight: clamp(visualWeight),
-          };
-        })
-        .filter((sound) => sound !== null);
-      const newestStartedAt = renderableSounds.reduce(
+            visualWeight,
+          },
+        ];
+      });
+      const newestStartedAt = activeSources.reduce(
         (latestStartedAt, sound) =>
           Math.max(latestStartedAt, sound.sound.startedAt),
         0,
       );
-      const peakSounds = renderableSounds.map((sound) => {
+      const spokeSources = activeSources.map((sound) => {
         const isNewest = sound.sound.startedAt === newestStartedAt;
-        const newestBoost =
-          isNewest && !currentReduceAnimations
-            ? Math.max(0, sound.introProgress - 1)
-            : 0;
-        const widthBias = sound.visualWeight * 8 + newestBoost * 28;
+        const newestBoost = isNewest ? 1 : 0;
+        const widthTightening =
+          sound.visualWeight * 10 +
+          newestBoost * 9 +
+          sound.burstEnvelope * 6;
 
         return {
           ...sound,
-          coreWidth: Math.max(18, 34 - widthBias),
-          crestSharpness: 2.6 + sound.visualWeight * 1.8 + newestBoost * 9,
+          coreWidth: Math.max(12, 24 - widthTightening * 0.35),
+          crestSharpness:
+            2.2 +
+            sound.visualWeight * 1.8 +
+            newestBoost * 0.9 +
+            sound.burstEnvelope * 0.6,
           isNewest,
           newestBoost,
-          peakReach:
-            radius *
-            (0.022 + sound.visualWeight * 0.072) *
-            Math.max(0, sound.introProgress) *
-            (1 + newestBoost * 1.05),
-          shoulderWidth: Math.max(36, 64 - widthBias * 0.55),
-          wakeWidth: Math.max(58, 92 - widthBias * 0.3),
+          segmentReach:
+            (1.4 + sound.visualWeight * 5.2 + newestBoost * 1.35) *
+            sound.settledProgress *
+            (1 + sound.burstEnvelope * 0.12),
+          shoulderWidth: Math.max(26, 42 - widthTightening * 0.25),
+          wakeWidth: Math.max(44, 64 - widthTightening * 0.18),
         };
       });
-      const newestPeakSound =
-        peakSounds.find((sound) => sound.isNewest) ?? null;
-      const hasActiveSignal = peakSounds.length > 0;
+      const newestSpokeSource =
+        spokeSources.find((sound) => sound.isNewest) ?? null;
+      const hasActiveSignal = spokeSources.length > 0;
 
       if (!currentReduceAnimations) {
         phaseOffsetRef.current += 0.008;
@@ -380,15 +391,19 @@ export function RadarCanvas({
       context.globalAlpha = 1;
 
       if (hasActiveSignal) {
-        const peakBaseRadius = radius * (0.222 + currentTotalIntensity * 0.014);
-        const peakLayerCount = 4;
-        const peakSteps = 260;
-        const getPeakState = (angleDegrees: number, layer: number) => {
-          let totalContribution = 0;
+        const slotCount = 72;
+        const maxSpokeSegments = 10;
+        const spokeInnerRadius = radius * (0.246 + currentTotalIntensity * 0.014);
+        const segmentLength = radius * 0.0135;
+        const segmentGap = radius * 0.0055;
+        const spokeThickness = currentHighContrast
+          ? Math.max(3.2, radius * 0.0105)
+          : Math.max(2.4, radius * 0.0088);
+        const getSlotState = (angleDegrees: number) => {
+          let totalHeight = 0;
 
-          peakSounds.forEach((sound) => {
+          spokeSources.forEach((sound) => {
             const angleDelta = angleDeltaDegrees(angleDegrees, sound.sound.direction);
-            const layerSoftening = 1 - layer * 0.08;
             const core =
               angleDelta <= sound.coreWidth
                 ? Math.pow(
@@ -408,7 +423,7 @@ export function RadarCanvas({
                         (angleDelta / sound.shoulderWidth) * (Math.PI / 2),
                       ),
                     ),
-                    2.1,
+                    1.85,
                   )
                 : 0;
             const cometWake =
@@ -418,92 +433,170 @@ export function RadarCanvas({
                       0,
                       Math.cos((angleDelta / sound.wakeWidth) * (Math.PI / 2)),
                     ),
-                    1.2,
-                  ) * 0.18
+                    1.18,
+                  ) * 0.2
                 : 0;
 
-            totalContribution +=
-              sound.peakReach *
-              layerSoftening *
-              (core + shoulder * 0.32 + cometWake);
+            totalHeight +=
+              sound.segmentReach * (core + shoulder * 0.28 + cometWake);
           });
 
-          const clampedContribution = Math.min(radius * 0.17, totalContribution);
+          const height = Math.min(maxSpokeSegments, totalHeight);
 
           return {
-            displacement: clampedContribution,
-            strength: clamp(clampedContribution / (radius * 0.14)),
+            height,
+            strength: clamp(height / (maxSpokeSegments * 0.78)),
           };
         };
 
-        for (let layer = 0; layer < peakLayerCount; layer += 1) {
-          const layerOffset = (layer - (peakLayerCount - 1) / 2) * 2.2;
+        context.lineCap = "butt";
 
-          for (let step = 0; step < peakSteps; step += 1) {
-            const angleDegrees = (step / peakSteps) * 360;
-            const nextAngleDegrees = ((step + 1) / peakSteps) * 360;
-            const theta = directionDegreesToCanvasRadians(angleDegrees);
-            const nextTheta = directionDegreesToCanvasRadians(nextAngleDegrees);
-            const peakState = getPeakState(angleDegrees, layer);
-            const nextPeakState = getPeakState(nextAngleDegrees, layer);
-            const radialDistance =
-              peakBaseRadius + layerOffset + peakState.displacement;
-            const nextRadialDistance =
-              peakBaseRadius + layerOffset + nextPeakState.displacement;
-            const x = Math.cos(theta) * radialDistance;
-            const y = Math.sin(theta) * radialDistance;
-            const nextX = Math.cos(nextTheta) * nextRadialDistance;
-            const nextY = Math.sin(nextTheta) * nextRadialDistance;
+        for (let slot = 0; slot < slotCount; slot += 1) {
+          const angleDegrees = (slot / slotCount) * 360;
+          const theta = directionDegreesToCanvasRadians(angleDegrees);
+          const slotState = getSlotState(angleDegrees);
+
+          if (slotState.height <= 0.03) {
+            continue;
+          }
+
+          const slotColor = mixWaveColor(currentSounds, angleDegrees, now);
+
+          for (let segmentIndex = 0; segmentIndex < maxSpokeSegments; segmentIndex += 1) {
+            const segmentFill = clamp(slotState.height - segmentIndex);
+
+            if (segmentFill <= 0.01) {
+              continue;
+            }
+
+            const segmentStart =
+              spokeInnerRadius + segmentIndex * (segmentLength + segmentGap);
+            const segmentEnd = segmentStart + segmentLength;
+            const x = Math.cos(theta) * segmentStart;
+            const y = Math.sin(theta) * segmentStart;
+            const nextX = Math.cos(theta) * segmentEnd;
+            const nextY = Math.sin(theta) * segmentEnd;
 
             context.beginPath();
             context.moveTo(x, y);
             context.lineTo(nextX, nextY);
-            context.strokeStyle = mixWaveColor(currentSounds, angleDegrees, now);
+            context.strokeStyle = slotColor;
             context.globalAlpha =
-              0.09 +
-              layer * 0.045 +
-              peakState.strength * (0.2 + layer * 0.015);
-            context.lineWidth = currentHighContrast ? 2.2 - layer * 0.18 : 1.7 - layer * 0.12;
+              (0.09 +
+                slotState.strength * 0.18 +
+                (segmentIndex / maxSpokeSegments) * 0.07) *
+              segmentFill;
+            context.lineWidth = spokeThickness;
             context.stroke();
           }
         }
 
-        if (newestPeakSound) {
+        if (!currentReduceAnimations) {
+          spokeSources.forEach((sound) => {
+            if (sound.burstEnvelope <= 0.02) {
+              return;
+            }
+
+            const burstFront =
+              0.7 + sound.burstWindowProgress * (maxSpokeSegments - 0.15);
+            const burstSectorWidth = sound.shoulderWidth + 8;
+
+            for (let slot = 0; slot < slotCount; slot += 1) {
+              const angleDegrees = (slot / slotCount) * 360;
+              const angleDelta = angleDeltaDegrees(angleDegrees, sound.sound.direction);
+
+              if (angleDelta > burstSectorWidth) {
+                continue;
+              }
+
+              const theta = directionDegreesToCanvasRadians(angleDegrees);
+              const burstInfluence = Math.pow(
+                Math.max(
+                  0,
+                  Math.cos((angleDelta / burstSectorWidth) * (Math.PI / 2)),
+                ),
+                2.2,
+              );
+
+              for (let segmentIndex = 0; segmentIndex < maxSpokeSegments; segmentIndex += 1) {
+                const frontDistance = Math.abs(
+                  segmentIndex + 0.5 - burstFront,
+                );
+
+                if (frontDistance > 1.2) {
+                  continue;
+                }
+
+                const burstAlpha =
+                  Math.max(0, 1 - frontDistance / 1.2) *
+                  burstInfluence *
+                  sound.burstEnvelope *
+                  (0.24 + sound.visualWeight * 0.14 + sound.newestBoost * 0.08);
+
+                if (burstAlpha <= 0.01) {
+                  continue;
+                }
+
+                const segmentStart =
+                  spokeInnerRadius + segmentIndex * (segmentLength + segmentGap);
+                const segmentEnd = segmentStart + segmentLength;
+                const x = Math.cos(theta) * segmentStart;
+                const y = Math.sin(theta) * segmentStart;
+                const nextX = Math.cos(theta) * segmentEnd;
+                const nextY = Math.sin(theta) * segmentEnd;
+
+                context.beginPath();
+                context.moveTo(x, y);
+                context.lineTo(nextX, nextY);
+                context.strokeStyle = `rgba(${sound.color.r}, ${sound.color.g}, ${sound.color.b}, 1)`;
+                context.globalAlpha = burstAlpha;
+                context.lineWidth = spokeThickness + 0.4;
+                context.stroke();
+              }
+            }
+          });
+        }
+
+        if (newestSpokeSource) {
           const newestTheta = directionDegreesToCanvasRadians(
-            newestPeakSound.sound.direction,
+            newestSpokeSource.sound.direction,
           );
           const newestTipDistance =
-            peakBaseRadius + newestPeakSound.peakReach * 0.98;
+            spokeInnerRadius +
+            Math.min(maxSpokeSegments - 0.3, newestSpokeSource.segmentReach + 0.4) *
+              (segmentLength + segmentGap);
           const tipX = Math.cos(newestTheta) * newestTipDistance;
           const tipY = Math.sin(newestTheta) * newestTipDistance;
           const tipGlowRadius =
             radius *
-            (0.06 +
-              newestPeakSound.visualWeight * 0.05 +
-              newestPeakSound.newestBoost * 0.18);
+            (0.028 +
+              newestSpokeSource.visualWeight * 0.04 +
+              newestSpokeSource.burstEnvelope * 0.05);
           const tipGlow = context.createRadialGradient(
             tipX,
             tipY,
-            radius * 0.01,
+            radius * 0.004,
             tipX,
             tipY,
             tipGlowRadius,
           );
           tipGlow.addColorStop(
             0,
-            `rgba(${newestPeakSound.color.r}, ${newestPeakSound.color.g}, ${
-              newestPeakSound.color.b
-            }, ${0.08 + newestPeakSound.visualWeight * 0.08 + newestPeakSound.newestBoost * 0.2})`,
+            `rgba(${newestSpokeSource.color.r}, ${newestSpokeSource.color.g}, ${
+              newestSpokeSource.color.b
+            }, ${0.16 + newestSpokeSource.visualWeight * 0.08 + newestSpokeSource.newestBoost * 0.05})`,
           );
           tipGlow.addColorStop(
             1,
-            `rgba(${newestPeakSound.color.r}, ${newestPeakSound.color.g}, ${newestPeakSound.color.b}, 0)`,
+            `rgba(${newestSpokeSource.color.r}, ${newestSpokeSource.color.g}, ${newestSpokeSource.color.b}, 0)`,
           );
           context.fillStyle = tipGlow;
           context.beginPath();
           context.arc(tipX, tipY, tipGlowRadius, 0, Math.PI * 2);
           context.fill();
         }
+
+        context.lineCap = "round";
       }
 
       context.globalAlpha = 1;
