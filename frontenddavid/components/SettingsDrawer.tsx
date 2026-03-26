@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 
 type SettingsDrawerProps = {
-  connectionStatus: "live" | "manual";
+  connectionStatus: "live" | "offline";
   isOpen: boolean;
   onClose: () => void;
   reduceAnimations: boolean;
@@ -108,13 +108,13 @@ export function SettingsDrawer({
               </section>
               <section className="space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
-                  Input
+                  Signal
                 </h2>
                 <div className="rounded-2xl border border-border bg-background p-4">
                   <p className="text-sm leading-6 text-muted">
-                    Press and hold the eight direction buttons around the radar
-                    to simulate incoming audio. The longer you hold, the more
-                    intense the signal becomes.
+                    Live front, left, and right magnitudes blend into one
+                    continuous field. Stronger channels lift the spoke band
+                    higher and push the outer wave farther outward.
                   </p>
                 </div>
               </section>
@@ -130,7 +130,7 @@ export function SettingsDrawer({
                   <p className="mt-3 text-sm text-muted">
                     Current status:{" "}
                     <span className="font-medium text-foreground">
-                      {connectionStatus === "live" ? "Live" : "Manual"}
+                      {connectionStatus === "live" ? "Live" : "Offline"}
                     </span>
                   </p>
                 </div>

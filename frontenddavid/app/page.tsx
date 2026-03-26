@@ -3,7 +3,6 @@
 import { MotionConfig } from "framer-motion";
 import { useState } from "react";
 
-import { LegendBar } from "@/components/LegendBar";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { RadarCanvas } from "@/components/RadarCanvas";
 import { SettingsDrawer } from "@/components/SettingsDrawer";
@@ -13,58 +12,9 @@ import { useSystemReducedMotion } from "@/hooks/useSystemReducedMotion";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { useSoundContext } from "@/providers/SoundProvider";
 
-const DIRECTION_BUTTONS = [
-  {
-    direction: 0,
-    label: "Forward",
-    positionClassName: "left-1/2 top-3 -translate-x-1/2",
-  },
-  {
-    direction: 45,
-    label: "Front right",
-    positionClassName: "right-6 top-6",
-  },
-  {
-    direction: 90,
-    label: "Right",
-    positionClassName: "right-3 top-1/2 -translate-y-1/2",
-  },
-  {
-    direction: 135,
-    label: "Behind right",
-    positionClassName: "bottom-6 right-6",
-  },
-  {
-    direction: 180,
-    label: "Behind",
-    positionClassName: "bottom-3 left-1/2 -translate-x-1/2",
-  },
-  {
-    direction: 225,
-    label: "Behind left",
-    positionClassName: "bottom-6 left-6",
-  },
-  {
-    direction: 270,
-    label: "Left",
-    positionClassName: "left-3 top-1/2 -translate-y-1/2",
-  },
-  {
-    direction: 315,
-    label: "Front left",
-    positionClassName: "left-6 top-6",
-  },
-] as const;
-
 /** Renders the live radar workspace with settings and onboarding overlays. */
 export default function HomePage() {
-  const {
-    connectionStatus,
-    sounds,
-    totalIntensity,
-    startManualDirection,
-    stopManualDirection,
-  } = useSoundContext();
+  const { connectionStatus, magnitudes, totalIntensity } = useSoundContext();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [hasOnboarded, setHasOnboarded, onboardingReady] = useStoredBoolean(
     STORAGE_KEYS.onboarded,
@@ -89,58 +39,13 @@ export default function HomePage() {
           onOpenSettings={() => setIsSettingsOpen(true)}
         />
         <main className="flex flex-1 items-center justify-center overflow-hidden px-4 py-3">
-          <div className="flex h-full w-full items-center justify-center">
-            <div className="relative inline-flex items-center justify-center">
-              <div className="flex items-center justify-center">
-                <RadarCanvas
-                  highContrast={highContrast}
-                  reduceAnimations={reduceAnimations}
-                  sounds={sounds}
-                  totalIntensity={totalIntensity}
-                />
-              </div>
-              {DIRECTION_BUTTONS.map((button) => (
-                <button
-                  key={button.label}
-                  aria-label={`Simulate ${button.label.toLowerCase()} audio`}
-                  className={`absolute z-10 rounded-full border border-border/90 bg-surface/95 px-2.5 py-1.5 text-[11px] font-semibold text-foreground shadow-[0_8px_24px_rgba(13,13,13,0.08)] backdrop-blur-sm transition hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground sm:px-3 sm:text-sm ${button.positionClassName}`}
-                  type="button"
-                  onBlur={() => stopManualDirection(button.direction)}
-                  onKeyDown={(event) => {
-                    if (
-                      (event.key === "Enter" || event.key === " ") &&
-                      !event.repeat
-                    ) {
-                      event.preventDefault();
-                      startManualDirection(button.direction);
-                    }
-                  }}
-                  onKeyUp={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      stopManualDirection(button.direction);
-                    }
-                  }}
-                  onPointerCancel={() => stopManualDirection(button.direction)}
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    startManualDirection(button.direction);
-                  }}
-                  onPointerUp={(event) => {
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                      event.currentTarget.releasePointerCapture(event.pointerId);
-                    }
-                    stopManualDirection(button.direction);
-                  }}
-                >
-                  {button.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <RadarCanvas
+            highContrast={highContrast}
+            magnitudes={magnitudes}
+            reduceAnimations={reduceAnimations}
+            totalIntensity={totalIntensity}
+          />
         </main>
-        <LegendBar />
         <SettingsDrawer
           connectionStatus={connectionStatus}
           highContrast={highContrast}

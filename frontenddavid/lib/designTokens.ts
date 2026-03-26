@@ -1,5 +1,3 @@
-import type { SoundLabel } from "@/types/sound";
-
 export const designTokens = {
   appName: "SixthSense",
   colors: {
@@ -8,21 +6,18 @@ export const designTokens = {
     canvasGradientEnd: "#8D7B5A",
     foreground: "#1F180F",
     muted: "#766956",
-    statusDemo: "#8C7F6B",
+    statusOffline: "#8C7F6B",
     statusLive: "#10B981",
     surface: "#FBF7EE",
     white: "#FFFDF8",
   },
   radar: {
-    alarmFlash: "#C84A31",
     centerDot: "#1F180F",
     centerGlow: "74, 91, 153",
     ringStroke: "#B9AB8E",
+    waveAccent: "#C84A31",
+    waveEnd: "#C66A42",
+    waveMid: "#8E806A",
+    waveStart: "#4A5B99",
   },
-  soundColors: {
-    alarm: "#C84A31",
-    unknown: "#8E806A",
-    vehicle: "#C66A42",
-    voice: "#4A5B99",
-  } satisfies Record<SoundLabel, string>,
 } as const;

@@ -2,8 +2,6 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 
-import { soundColors } from "@/lib/soundColors";
-
 type OnboardingModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -48,29 +46,18 @@ export function OnboardingModal({
                   How to read the radar
                 </h2>
                 <p className="text-sm leading-6 text-muted">
-                  You are at the centre. A dot&apos;s position shows where a sound is
-                  coming from, and its distance from you shows how loud it is.
+                  You are at the centre. The radar swells toward the strongest
+                  incoming side, so taller spokes and a lifted outer wave mean
+                  more sound energy in that direction.
                 </p>
               </section>
               <section className="space-y-2">
-                <h2 className="text-base font-bold text-foreground">Colour guide</h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    ["Voice", soundColors.voice],
-                    ["Vehicle", soundColors.vehicle],
-                    ["Alarm", soundColors.alarm],
-                    ["Unknown", soundColors.unknown],
-                  ].map(([label, color]) => (
-                    <div key={label} className="flex items-center gap-2 text-sm text-foreground">
-                      <span
-                        aria-hidden="true"
-                        className="h-3 w-3 rounded-full"
-                        style={{ backgroundColor: color }}
-                      />
-                      <span>{label}</span>
-                    </div>
-                  ))}
-                </div>
+                <h2 className="text-base font-bold text-foreground">How signals blend</h2>
+                <p className="text-sm leading-6 text-muted">
+                  Front, left, and right magnitudes mix into one continuous
+                  field. If two channels rise together, the strongest motion
+                  appears between them instead of snapping to a fixed lane.
+                </p>
               </section>
             </div>
             <button

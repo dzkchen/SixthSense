@@ -8,20 +8,20 @@ import {
 } from "react";
 
 import { useSoundStream } from "@/hooks/useSoundStream";
-import type { ConnectionStatus, SoundEvent } from "@/types/sound";
+import type {
+  ConnectionStatus,
+  DirectionalMagnitudes,
+} from "@/types/sound";
 
 type SoundContextValue = {
-  sounds: SoundEvent[];
-  history: SoundEvent[];
+  magnitudes: DirectionalMagnitudes;
   connectionStatus: ConnectionStatus;
   totalIntensity: number;
-  startManualDirection: (direction: number) => void;
-  stopManualDirection: (direction: number) => void;
 };
 
 const SoundContext = createContext<SoundContextValue | null>(null);
 
-/** Provides shared sound state so radar and history stay in sync across routes. */
+/** Provides shared live magnitude state to the radar surface and shell UI. */
 export function SoundProvider({ children }: { children: ReactNode }) {
   const soundStream = useSoundStream();
 

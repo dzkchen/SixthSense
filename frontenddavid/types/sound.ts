@@ -1,25 +1,12 @@
-export type SoundLabel = "voice" | "vehicle" | "alarm" | "unknown";
-
-export type SoundEvent = {
-  id: string;
-  direction: number;
-  intensity: number;
-  label: SoundLabel;
-  startedAt: number;
-  lastSeenAt: number;
-  isActive: boolean;
+export type DirectionalMagnitudes = {
+  front: number;
+  left: number;
+  right: number;
 };
 
-export type ConnectionStatus = "live" | "manual";
+export type ConnectionStatus = "live" | "offline";
 
-export type SoundUpdateMessage = {
-  type: "sound_update";
-  sound: SoundEvent;
+export type MagnitudeMessage = {
+  type: "magnitude_update";
+  magnitudes: DirectionalMagnitudes;
 };
-
-export type SoundEndMessage = {
-  type: "sound_end";
-  id: string;
-};
-
-export type SoundMessage = SoundUpdateMessage | SoundEndMessage;

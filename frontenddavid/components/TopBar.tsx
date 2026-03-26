@@ -1,38 +1,24 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-
 import { designTokens } from "@/lib/designTokens";
 import type { ConnectionStatus } from "@/types/sound";
 
 type TopBarProps = {
   connectionStatus: ConnectionStatus;
   onOpenSettings: () => void;
-  showBackButton?: boolean;
 };
 
 function IconButton({
   ariaLabel,
   children,
-  href,
   onClick,
 }: {
   ariaLabel: string;
   children: React.ReactNode;
-  href?: string;
   onClick?: () => void;
 }) {
   const baseClassName =
     "flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-foreground transition hover:bg-black/[0.03] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground";
-
-  if (href) {
-    return (
-      <Link aria-label={ariaLabel} className={baseClassName} href={href}>
-        {children}
-      </Link>
-    );
-  }
 
   return (
     <button
@@ -47,13 +33,7 @@ function IconButton({
 }
 
 /** Renders the fixed application header with connection state and route actions. */
-export function TopBar({
-  connectionStatus,
-  onOpenSettings,
-  showBackButton = false,
-}: TopBarProps) {
-  const router = useRouter();
-
+export function TopBar({ connectionStatus, onOpenSettings }: TopBarProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b border-border bg-surface px-5">
       <div>
@@ -70,10 +50,10 @@ export function TopBar({
               backgroundColor:
                 connectionStatus === "live"
                   ? designTokens.colors.statusLive
-                  : designTokens.colors.statusDemo,
+                  : designTokens.colors.statusOffline,
             }}
           />
-          <span>{connectionStatus === "live" ? "Live" : "Manual"}</span>
+          <span>{connectionStatus === "live" ? "Live" : "Offline"}</span>
         </div>
         <IconButton ariaLabel="Open settings" onClick={onOpenSettings}>
           <svg
@@ -90,41 +70,6 @@ export function TopBar({
             <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
           </svg>
         </IconButton>
-        {showBackButton ? (
-          <IconButton ariaLabel="Go back" onClick={() => router.back()}>
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M14.5 6.5 9 12l5.5 5.5"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.8"
-              />
-            </svg>
-          </IconButton>
-        ) : (
-          <IconButton ariaLabel="Open history" href="/history">
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M12 8v4l2.5 2.5M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.8"
-              />
-            </svg>
-          </IconButton>
-        )}
       </div>
     </header>
   );
