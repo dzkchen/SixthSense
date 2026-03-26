@@ -239,6 +239,7 @@ export function RadarCanvas({
 
         return ambientRibbon + ambientCrossRibbon + ambientUndertow;
       };
+      const shouldRenderStaticCircle = currentReduceAnimations;
 
       for (let layer = 0; layer < layerCount; layer += 1) {
         const layerOffset = (layer - (layerCount - 1) / 2) * 2.2;
@@ -285,8 +286,12 @@ export function RadarCanvas({
               radius *
               0.015 *
               (0.4 + nextWaveContribution);
-          const ambientShapeMotion = getAmbientShapeMotion(theta, layer);
-          const nextAmbientShapeMotion = getAmbientShapeMotion(nextTheta, layer);
+          const ambientShapeMotion = shouldRenderStaticCircle
+            ? 0
+            : getAmbientShapeMotion(theta, layer);
+          const nextAmbientShapeMotion = shouldRenderStaticCircle
+            ? 0
+            : getAmbientShapeMotion(nextTheta, layer);
 
           const radialDistance = Math.min(
             radius - 8,
