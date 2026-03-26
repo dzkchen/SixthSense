@@ -1,0 +1,9 @@
+scipy
+numpy
+sounddevice
+flask
+opencv-python
+watchdog
+pyopenssl
+fastapi
+uvicorn[standard]

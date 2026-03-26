@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SixthSense Camera</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                background-color: #000;
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                padding: 10px;
+            }
+
+            .container {
+                width: 100%;
+                max-width: 600px;
+                background: #1a1a1a;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+            }
+
+            .header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 24px;
+                margin-bottom: 5px;
+            }
+
+            .header p {
+                font-size: 12px;
+                opacity: 0.9;
+            }
+
+            .video-section {
+                position: relative;
+                background: #000;
+                aspect-ratio: 4/3;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+            }
+
+            #videoInput,
+            #canvasOutput {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+
+            .status-bar {
+                background: #222;
+                padding: 15px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-top: 1px solid #333;
+                color: white;
+                font-size: 14px;
+            }
+
+            .status-indicator {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                background: #888;
+                transition: background 0.3s;
+            }
+
+            .dot.connected {
+                background: #4ade80;
+                box-shadow: 0 0 10px #4ade80;
+            }
+
+            .dot.error {
+                background: #ef4444;
+                box-shadow: 0 0 10px #ef4444;
+            }
+
+            .frame-counter {
+                color: #aaa;
+                font-size: 12px;
+            }
+
+            .controls {
+                padding: 15px;
+                display: flex;
+                gap: 10px;
+            }
+
+            button {
+                flex: 1;
+                padding: 12px;
+                border: none;
+                border-radius: 8px;
+                background: #667eea;
+                color: white;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s;
+            }
+
+            button:active {
+                transform: scale(0.98);
+                opacity: 0.8;
+            }
+
+            button:disabled {
+                background: #444;
+                cursor: not-allowed;
+                opacity: 0.5;
+            }
+
+            .info {
+                padding: 15px;
+                background: #222;
+                border-top: 1px solid #333;
+                color: #aaa;
+                font-size: 12px;
+                text-align: center;
+                line-height: 1.6;
+            }
+
+            .error-message {
+                color: #ef4444;
+                padding: 10px;
+                background: #3f0000;
+                border-radius: 6px;
+                margin-bottom: 10px;
+                display: none;
+                text-align: center;
+            }
+
+            .direction-display {
+                padding: 20px;
+                background: #222;
+                border-top: 1px solid #333;
+                color: white;
+                font-size: 48px;
+                text-align: center;
+                min-height: 80px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 20px;
+            }
+
+            .direction-label {
+                font-size: 14px;
+                color: #aaa;
+                margin-top: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🎥 SixthSense Camera</h1>
+                <p>sigma sigma app</p>
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <!-- DEBUG INFO -->
+            <div
+                style="
+                    background: #333;
+                    color: #aaa;
+                    padding: 10px;
+                    font-size: 11px;
+                    border-bottom: 1px solid #555;
+                "
+            >
+                <div>
+                    mediaDevices:
+                    <span id="debugMediaDevices">checking...</span>
+                </div>
+                <div>
+                    getUserMedia:
+                    <span id="debugGetUserMedia">checking...</span>
+                </div>
+                <div>
+                    Page loaded: <span id="debugLoaded">checking...</span>
+                </div>
+            </div>
+
+            <div class="video-section">
+                <video
+                    id="videoInput"
+                    autoplay
+                    playsinline
+                    width="320"
+                    height="240"
+                ></video>
+                <canvas id="canvasOutput" style="display: none"></canvas>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-indicator">
+                    <div class="dot" id="statusDot"></div>
+                    <span id="statusText">Initializing...</span>
+                </div>
+                <div class="frame-counter" id="frameCounter">0 frames</div>
+            </div>
+
+            <div class="controls">
+                <button id="startBtn" onclick="startCamera()">
+                    Start Camera
+                </button>
+                <button id="stopBtn" onclick="stopCamera()" disabled>
+                    Stop Camera
+                </button>
+                <button
+                    id="flipBtn"
+                    onclick="flipCamera()"
+                    disable
+                    style="background: #764ba2"
+                >
+                    Flip Camera
+                </button>
+            </div>
+
+            <div class="direction-display" id="directionDisplay">
+                <span id="directionArrow">↔️</span>
+                <span class="direction-label" id="directionLabel">Listening...</span>
+            </div>
+
+            <div class="info">
+                <strong>Instructions:</strong><br />
+                1. Click "Start Camera" to begin<br />
+                2. Allow camera access when prompted<br />
+                3. Frames stream to your laptop for processing<br />
+                4. Audio direction detected below<br />
+                Status updates appear above
+            </div>
+        </div>
+
+        <script>
+            // Debug checks
+            function checkAPIs() {
+                document.getElementById("debugMediaDevices").textContent =
+                    !!navigator.mediaDevices ? "✓ Yes" : "✗ No";
+                document.getElementById("debugGetUserMedia").textContent =
+                    !!navigator.mediaDevices?.getUserMedia ? "✓ Yes" : "✗ No";
+                document.getElementById("debugLoaded").textContent = "✓ Yes";
+            }
+
+            // Check immediately
+            checkAPIs();
+
+            const video = document.getElementById("videoInput");
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+
+            let stream = null;
+            let isStreaming = false;
+            let frameCount = 0;
+            let lastUploadTime = Date.now();
+            const uploadInterval = 500; // Upload every 500ms
+
+            async function startCamera() {
+                try {
+                    document.getElementById("errorMessage").style.display =
+                        "none";
+                    updateStatus("Initializing...", "connecting");
+                    console.log(navigator);
+                    // Check if getUserMedia is available
+                    if (
+                        !navigator.mediaDevices ||
+                        !navigator.mediaDevices.getUserMedia
+                    ) {
+                        throw new Error(
+                            "Camera API not supported on this device",
+                        );
+                    }
+
+                    // Request camera access
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: "user",
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                        },
+                        audio: false,
+                    });
+
+                    if (!stream) {
+                        throw new Error("Failed to get camera stream");
+                    }
+
+                    video.srcObject = stream;
+                    isStreaming = true;
+
+                    // Wait for video to load
+                    video.onloadedmetadata = function () {
+                        console.log("Video loaded, starting to send frames");
+                        sendFrames();
+                    };
+
+                    document.getElementById("startBtn").disabled = true;
+                    document.getElementById("stopBtn").disabled = false;
+                    updateStatus("Connected", "connected");
+                } catch (error) {
+                    console.error("Camera Error:", error);
+                    showError(`Camera Error: ${error.message}`);
+                    updateStatus("Error", "error");
+                    document.getElementById("startBtn").disabled = false;
+                    document.getElementById("stopBtn").disabled = true;
+                }
+            }
+
+            function stopCamera() {
+                if (stream) {
+                    stream.getTracks().forEach((track) => track.stop());
+                }
+                isStreaming = false;
+                video.srcObject = null;
+
+                document.getElementById("startBtn").disabled = false;
+                document.getElementById("stopBtn").disabled = true;
+                updateStatus("Stopped", "disconnected");
+            }
+
+            let currentFacingMode = "user";
+
+            function flipCamera() {
+                if (!isStreaming) return;
+
+                // Stop current stream
+                if (stream) {
+                    stream.getTracks().forEach((track) => track.stop());
+                }
+
+                // Switch camera
+                currentFacingMode =
+                    currentFacingMode === "user" ? "environment" : "user";
+
+                // Request new stream
+                navigator.mediaDevices
+                    .getUserMedia({
+                        video: {
+                            facingMode: currentFacingMode,
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                        },
+                        audio: false,
+                    })
+                    .then((newStream) => {
+                        stream = newStream;
+                        video.srcObject = stream;
+                        updateStatus("Connected", "connected");
+                    })
+                    .catch((error) => {
+                        console.error("Flip error:", error);
+                        showError(`Flip Error: ${error.message}`);
+                        updateStatus("Error", "error");
+                    });
+            }
+
+            function sendFrames() {
+                if (!isStreaming) return;
+
+                const now = Date.now();
+                if (now - lastUploadTime >= uploadInterval) {
+                    try {
+                        // Draw video frame to canvas
+                        if (video.videoWidth > 0 && video.videoHeight > 0) {
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            ctx.drawImage(video, 0, 0);
+
+                            // Get JPEG data
+                            canvas.toBlob(
+                                (blob) => {
+                                    if (blob) {
+                                        const reader = new FileReader();
+                                        reader.onload = () => {
+                                            const base64 = reader.result;
+
+                                            // Send to Flask server
+                                            fetch("/upload-frame", {
+                                                method: "POST",
+                                                headers: {
+                                                    "Content-Type":
+                                                        "application/json",
+                                                },
+                                                body: JSON.stringify({
+                                                    image: base64,
+                                                }),
+                                            })
+                                                .then((response) => {
+                                                    if (response.ok) {
+                                                        frameCount++;
+                                                        document.getElementById(
+                                                            "frameCounter",
+                                                        ).textContent =
+                                                            frameCount +
+                                                            " frames";
+                                                        updateStatus(
+                                                            "Connected",
+                                                            "connected",
+                                                        );
+                                                    } else {
+                                                        updateStatus(
+                                                            "Server Error",
+                                                            "error",
+                                                        );
+                                                    }
+                                                })
+                                                .catch((error) => {
+                                                    updateStatus(
+                                                        "Offline",
+                                                        "error",
+                                                    );
+                                                    console.error(
+                                                        "Upload error:",
+                                                        error,
+                                                    );
+                                                });
+                                        };
+                                        reader.readAsDataURL(blob);
+                                    }
+                                },
+                                "image/jpeg",
+                                0.7,
+                            );
+                        }
+
+                        lastUploadTime = now;
+                    } catch (error) {
+                        console.error("Frame send error:", error);
+                        updateStatus("Error", "error");
+                    }
+                }
+
+                requestAnimationFrame(sendFrames);
+            }
+
+            function updateStatus(text, status) {
+                const dot = document.getElementById("statusDot");
+                const statusText = document.getElementById("statusText");
+
+                if (statusText) {
+                    statusText.textContent = text;
+                }
+                if (dot) {
+                    dot.className = "dot";
+                    if (status === "connected") {
+                        dot.classList.add("connected");
+                    } else if (status === "error") {
+                        dot.classList.add("error");
+                    }
+                }
+            }
+
+            function showError(message) {
+                const errorDiv = document.getElementById("errorMessage");
+                if (errorDiv) {
+                    errorDiv.textContent = message;
+                    errorDiv.style.display = "block";
+                }
+                console.error(message);
+            }
+
+            // Direction detection
+            async function updateDirection() {
+                try {
+                    const response = await fetch("/get-direction");
+                    if (response.ok) {
+                        const data = await response.json();
+                        displayDirection(data.direction);
+                    }
+                } catch (error) {
+                    console.error("Direction fetch error:", error);
+                }
+            }
+
+            function displayDirection(direction) {
+                const arrow = document.getElementById("directionArrow");
+                const label = document.getElementById("directionLabel");
+
+                switch (direction) {
+                    case "left":
+                        arrow.textContent = "⬅️";
+                        label.textContent = "LEFT";
+                        break;
+                    case "right":
+                        arrow.textContent = "➡️";
+                        label.textContent = "RIGHT";
+                        break;
+                    case "center":
+                        arrow.textContent = "⬆️";
+                        label.textContent = "CENTER";
+                        break;
+                    default:
+                        arrow.textContent = "↔️";
+                        label.textContent = "Listening...";
+                }
+            }
+
+            // Initialize when page loads
+            window.addEventListener("load", function () {
+                updateStatus("Ready", "disconnected");
+                // Poll direction every 200ms
+                setInterval(updateDirection, 200);
+            });
+        </script>
+    </body>
+</html>
