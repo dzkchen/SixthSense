@@ -15,7 +15,7 @@ const END_FADE_DURATION_MS = 1500;
 const EXPIRY_TIMEOUT_MS = 4000;
 const MANUAL_SOUND_DURATION_MS = 1200;
 const MAX_TOTAL_INTENSITY_SOUNDS = 3;
-const SIGNAL_DIRECTIONS = [0, 90, 180, 270] as const;
+const SIGNAL_DIRECTIONS = [0, 45, 90, 135, 180, 225, 270, 315] as const;
 const WEBSOCKET_TIMEOUT_MS = 2000;
 const WS_URL = "ws://localhost:8000/ws/audio-stream";
 
@@ -33,7 +33,7 @@ function clampIntensity(value: number) {
 
 function snapToSignalDirection(direction: number) {
   const normalized = ((direction % 360) + 360) % 360;
-  const index = Math.round(normalized / 90) % SIGNAL_DIRECTIONS.length;
+  const index = Math.round(normalized / 45) % SIGNAL_DIRECTIONS.length;
 
   return SIGNAL_DIRECTIONS[index];
 }

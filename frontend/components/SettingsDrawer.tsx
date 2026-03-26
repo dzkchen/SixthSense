@@ -112,8 +112,9 @@ export function SettingsDrawer({
                 </h2>
                 <div className="rounded-2xl border border-border bg-background p-4">
                   <p className="text-sm leading-6 text-muted">
-                    Use the Forward, Right, Behind, and Left buttons around the
-                    radar to simulate incoming audio direction.
+                    Use the eight direction buttons around the radar to simulate
+                    incoming audio, including diagonals like front right and
+                    behind left.
                   </p>
                 </div>
               </section>

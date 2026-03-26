@@ -17,22 +17,42 @@ const DIRECTION_BUTTONS = [
   {
     direction: 0,
     label: "Forward",
-    positionClassName: "left-1/2 top-5 -translate-x-1/2",
+    positionClassName: "left-1/2 top-3 -translate-x-1/2",
+  },
+  {
+    direction: 45,
+    label: "Front right",
+    positionClassName: "right-6 top-6",
   },
   {
     direction: 90,
     label: "Right",
-    positionClassName: "right-5 top-1/2 -translate-y-1/2",
+    positionClassName: "right-3 top-1/2 -translate-y-1/2",
+  },
+  {
+    direction: 135,
+    label: "Behind right",
+    positionClassName: "bottom-6 right-6",
   },
   {
     direction: 180,
     label: "Behind",
-    positionClassName: "bottom-5 left-1/2 -translate-x-1/2",
+    positionClassName: "bottom-3 left-1/2 -translate-x-1/2",
+  },
+  {
+    direction: 225,
+    label: "Behind left",
+    positionClassName: "bottom-6 left-6",
   },
   {
     direction: 270,
     label: "Left",
-    positionClassName: "left-5 top-1/2 -translate-y-1/2",
+    positionClassName: "left-3 top-1/2 -translate-y-1/2",
+  },
+  {
+    direction: 315,
+    label: "Front left",
+    positionClassName: "left-6 top-6",
   },
 ] as const;
 
@@ -82,7 +102,7 @@ export default function HomePage() {
                 <button
                   key={button.label}
                   aria-label={`Simulate ${button.label.toLowerCase()} audio`}
-                  className={`absolute z-10 rounded-full border border-border/90 bg-surface/95 px-3 py-1.5 text-sm font-semibold text-foreground shadow-[0_8px_24px_rgba(13,13,13,0.08)] backdrop-blur-sm transition hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground ${button.positionClassName}`}
+                  className={`absolute z-10 rounded-full border border-border/90 bg-surface/95 px-2.5 py-1.5 text-[11px] font-semibold text-foreground shadow-[0_8px_24px_rgba(13,13,13,0.08)] backdrop-blur-sm transition hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground sm:px-3 sm:text-sm ${button.positionClassName}`}
                   type="button"
                   onClick={() => triggerManualDirection(button.direction)}
                 >
