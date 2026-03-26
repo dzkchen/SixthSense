@@ -14,6 +14,10 @@ type RadarCanvasProps = {
   reduceAnimations: boolean;
 };
 
+function directionDegreesToCanvasRadians(directionDegrees: number) {
+  return ((directionDegrees - 90) * Math.PI) / 180;
+}
+
 function hexToRgb(hex: string) {
   const sanitized = hex.replace("#", "");
   const value = Number.parseInt(sanitized, 16);
@@ -209,8 +213,8 @@ export function RadarCanvas({
         for (let step = 0; step < steps; step += 1) {
           const angleDegrees = (step / steps) * 360;
           const nextAngleDegrees = ((step + 1) / steps) * 360;
-          const theta = (angleDegrees * Math.PI) / 180;
-          const nextTheta = (nextAngleDegrees * Math.PI) / 180;
+          const theta = directionDegreesToCanvasRadians(angleDegrees);
+          const nextTheta = directionDegreesToCanvasRadians(nextAngleDegrees);
 
           const waveContribution = currentSounds.reduce((sum, sound) => {
             const fadeProgress = sound.isActive
