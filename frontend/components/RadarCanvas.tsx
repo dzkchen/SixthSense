@@ -14,6 +14,10 @@ type RadarCanvasProps = {
   reduceAnimations: boolean;
 };
 
+function directionDegreesToCanvasRadians(directionDegrees: number) {
+  return ((directionDegrees - 90) * Math.PI) / 180;
+}
+
 function hexToRgb(hex: string) {
   const sanitized = hex.replace("#", "");
   const value = Number.parseInt(sanitized, 16);
@@ -166,6 +170,11 @@ export function RadarCanvas({
       const centerY = height / 2;
       const dominantColor = dominantSoundColor(currentSounds);
       const dominantGlow = hexToRgb(dominantColor);
+      const ambientPresence = Math.max(0.28, 1 - currentTotalIntensity * 1.15);
+      const ambientPhase = currentReduceAnimations ? 1.2 : phaseOffsetRef.current;
+      const ambientBreath = currentReduceAnimations
+        ? 0.55
+        : (Math.sin(ambientPhase * 0.9) + 1) / 2;
 
       if (!currentReduceAnimations) {
         phaseOffsetRef.current += 0.008;
@@ -174,12 +183,15 @@ export function RadarCanvas({
       context.clearRect(0, 0, width, height);
       context.save();
       context.translate(centerX, centerY);
+      context.lineCap = "round";
+      context.lineJoin = "round";
 
       const centerGlow = context.createRadialGradient(0, 0, 0, 0, 0, radius * 0.4);
       centerGlow.addColorStop(
         0,
         `rgba(${dominantGlow.r}, ${dominantGlow.g}, ${dominantGlow.b}, ${
-          currentTotalIntensity * 0.18
+          currentTotalIntensity * 0.18 +
+          ambientPresence * 0.05 * (0.7 + ambientBreath * 0.6)
         })`,
       );
       centerGlow.addColorStop(1, `rgba(${dominantGlow.r}, ${dominantGlow.g}, ${dominantGlow.b}, 0)`);
@@ -190,7 +202,8 @@ export function RadarCanvas({
 
       context.strokeStyle = designTokens.radar.ringStroke;
       context.lineWidth = 1.5;
-      context.globalAlpha = currentHighContrast ? 0.6 : 0.3;
+      context.globalAlpha =
+        (currentHighContrast ? 0.6 : 0.3) + ambientPresence * 0.04 * ambientBreath;
       [0.33, 0.66, 1].forEach((multiplier) => {
         context.beginPath();
         context.arc(0, 0, radius * multiplier, 0, Math.PI * 2);
@@ -198,10 +211,34 @@ export function RadarCanvas({
       });
       context.globalAlpha = 1;
 
-      const baseRadius = radius * (0.22 + currentTotalIntensity * 0.06);
+      const baseRadius =
+        radius *
+        (0.218 +
+          currentTotalIntensity * 0.06 +
+          ambientPresence * 0.014 +
+          ambientPresence * ambientBreath * 0.015);
       const edgeReach = radius * (0.18 + currentTotalIntensity * 0.38);
       const layerCount = 7;
       const steps = 220;
+      const getAmbientShapeMotion = (theta: number, layer: number) => {
+        const ambientRibbon =
+          radius *
+          (0.01 + layer * 0.0007) *
+          ambientPresence *
+          Math.sin(theta * 3 + ambientPhase * 0.82 + layer * 0.45);
+        const ambientCrossRibbon =
+          radius *
+          (0.008 + (layerCount - layer) * 0.0006) *
+          ambientPresence *
+          Math.sin(theta * 5 - ambientPhase * 0.58 - layer * 0.32);
+        const ambientUndertow =
+          radius *
+          0.0045 *
+          ambientPresence *
+          Math.cos(theta * 7 - ambientPhase * 0.3 + layer * 0.18);
+
+        return ambientRibbon + ambientCrossRibbon + ambientUndertow;
+      };
 
       for (let layer = 0; layer < layerCount; layer += 1) {
         const layerOffset = (layer - (layerCount - 1) / 2) * 2.2;
@@ -209,8 +246,8 @@ export function RadarCanvas({
         for (let step = 0; step < steps; step += 1) {
           const angleDegrees = (step / steps) * 360;
           const nextAngleDegrees = ((step + 1) / steps) * 360;
-          const theta = (angleDegrees * Math.PI) / 180;
-          const nextTheta = (nextAngleDegrees * Math.PI) / 180;
+          const theta = directionDegreesToCanvasRadians(angleDegrees);
+          const nextTheta = directionDegreesToCanvasRadians(nextAngleDegrees);
 
           const waveContribution = currentSounds.reduce((sum, sound) => {
             const fadeProgress = sound.isActive
@@ -248,14 +285,24 @@ export function RadarCanvas({
               radius *
               0.015 *
               (0.4 + nextWaveContribution);
+          const ambientShapeMotion = getAmbientShapeMotion(theta, layer);
+          const nextAmbientShapeMotion = getAmbientShapeMotion(nextTheta, layer);
 
           const radialDistance = Math.min(
             radius - 8,
-            baseRadius + layerOffset + waveContribution * edgeReach + waveMotion,
+            baseRadius +
+              layerOffset +
+              ambientShapeMotion +
+              waveContribution * edgeReach +
+              waveMotion,
           );
           const nextRadialDistance = Math.min(
             radius - 8,
-            baseRadius + layerOffset + nextWaveContribution * edgeReach + nextWaveMotion,
+            baseRadius +
+              layerOffset +
+              nextAmbientShapeMotion +
+              nextWaveContribution * edgeReach +
+              nextWaveMotion,
           );
 
           const x = Math.cos(theta) * radialDistance;
@@ -267,7 +314,8 @@ export function RadarCanvas({
           context.moveTo(x, y);
           context.lineTo(nextX, nextY);
           context.strokeStyle = mixWaveColor(currentSounds, angleDegrees);
-          context.globalAlpha = 0.24 + layer * 0.06;
+          context.globalAlpha =
+            0.22 + layer * 0.065 + ambientPresence * 0.04 * (0.45 + ambientBreath);
           context.lineWidth = currentHighContrast ? 2 : 1.35;
           context.stroke();
         }
