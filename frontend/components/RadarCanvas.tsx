@@ -274,19 +274,6 @@ export function RadarCanvas({
       }
       context.globalAlpha = 1;
 
-      context.fillStyle = designTokens.colors.muted;
-      context.font = "500 12px var(--font-inter)";
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      [
-        { label: "↑ Forward", x: 0, y: -radius + 20 },
-        { label: "→ Right", x: radius - 38, y: 0 },
-        { label: "↓ Behind", x: 0, y: radius - 20 },
-        { label: "← Left", x: -radius + 28, y: 0 },
-      ].forEach(({ label, x, y }) => {
-        context.fillText(label, x, y);
-      });
-
       context.fillStyle = designTokens.radar.centerDot;
       context.beginPath();
       context.arc(0, 0, 5, 0, Math.PI * 2);
