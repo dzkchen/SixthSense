@@ -31,6 +31,10 @@ function getSoundVisualWeight(sound: SoundEvent, now: number) {
   return sound.intensity * getFadeProgress(sound, now);
 }
 
+function getIntensityEnvelope(value: number) {
+  return easeOutCubic(clamp(value));
+}
+
 function clamp(value: number, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
 }
@@ -236,27 +240,29 @@ export function RadarCanvas({
       const spokeSources = activeSources.map((sound) => {
         const isNewest = sound.sound.startedAt === newestStartedAt;
         const newestBoost = isNewest ? 1 : 0;
+        const intensityEnvelope = getIntensityEnvelope(sound.visualWeight);
         const widthTightening =
-          sound.visualWeight * 10 +
-          newestBoost * 9 +
-          sound.burstEnvelope * 6;
+          intensityEnvelope * 10.5 +
+          newestBoost * 6.5 +
+          sound.burstEnvelope * 4.5;
 
         return {
           ...sound,
-          coreWidth: Math.max(12, 24 - widthTightening * 0.35),
+          coreWidth: Math.max(10, 26 - widthTightening * 0.42),
           crestSharpness:
             2.2 +
-            sound.visualWeight * 1.8 +
+            intensityEnvelope * 2.2 +
             newestBoost * 0.9 +
             sound.burstEnvelope * 0.6,
+          intensityEnvelope,
           isNewest,
           newestBoost,
           segmentReach:
-            (1.4 + sound.visualWeight * 5.2 + newestBoost * 1.35) *
+            (0.85 + intensityEnvelope * 7.4 + newestBoost * 0.8) *
             sound.settledProgress *
-            (1 + sound.burstEnvelope * 0.12),
-          shoulderWidth: Math.max(26, 42 - widthTightening * 0.25),
-          wakeWidth: Math.max(44, 64 - widthTightening * 0.18),
+            (1 + sound.burstEnvelope * 0.18),
+          shoulderWidth: Math.max(22, 44 - widthTightening * 0.3),
+          wakeWidth: Math.max(36, 64 - widthTightening * 0.24),
         };
       });
       const newestSpokeSource =
@@ -401,6 +407,8 @@ export function RadarCanvas({
           : Math.max(2.4, radius * 0.0088);
         const getSlotState = (angleDegrees: number) => {
           let totalHeight = 0;
+          let totalIntensity = 0;
+          let totalInfluence = 0;
 
           spokeSources.forEach((sound) => {
             const angleDelta = angleDeltaDegrees(angleDegrees, sound.sound.direction);
@@ -436,16 +444,27 @@ export function RadarCanvas({
                     1.18,
                   ) * 0.2
                 : 0;
+            const directionalInfluence = core + shoulder * 0.28 + cometWake;
 
-            totalHeight +=
-              sound.segmentReach * (core + shoulder * 0.28 + cometWake);
+            if (directionalInfluence <= 0) {
+              return;
+            }
+
+            totalHeight += sound.segmentReach * directionalInfluence;
+            totalIntensity += sound.intensityEnvelope * directionalInfluence;
+            totalInfluence += directionalInfluence;
           });
 
           const height = Math.min(maxSpokeSegments, totalHeight);
+          const intensity =
+            totalInfluence > 0 ? clamp(totalIntensity / totalInfluence) : 0;
 
           return {
             height,
-            strength: clamp(height / (maxSpokeSegments * 0.78)),
+            intensity,
+            strength: clamp(
+              height / (maxSpokeSegments * 0.9) + intensity * 0.24,
+            ),
           };
         };
 
@@ -485,7 +504,8 @@ export function RadarCanvas({
               (0.15 +
                 slotState.strength * 0.22 +
                 (segmentIndex / maxSpokeSegments) * 0.08) *
-              segmentFill;
+              segmentFill *
+              (0.55 + slotState.intensity * 0.45);
             context.lineWidth = spokeThickness;
             context.stroke();
           }
@@ -574,18 +594,21 @@ export function RadarCanvas({
             { offset: 24, weight: 1 },
           ] as const;
           let weightedHeight = 0;
+          let weightedIntensity = 0;
           let weightedStrength = 0;
           let totalWeight = 0;
 
           samples.forEach((sample) => {
             const slotState = getSlotState(angleDegrees + sample.offset);
             weightedHeight += slotState.height * sample.weight;
+            weightedIntensity += slotState.intensity * sample.weight;
             weightedStrength += slotState.strength * sample.weight;
             totalWeight += sample.weight;
           });
 
           return {
             height: weightedHeight / totalWeight,
+            intensity: weightedIntensity / totalWeight,
             strength: weightedStrength / totalWeight,
           };
         };
@@ -604,8 +627,14 @@ export function RadarCanvas({
             );
             const waveEnvelope = easeOutCubic(normalizedHeight);
             const nextWaveEnvelope = easeOutCubic(nextNormalizedHeight);
-            const wavePresence = 0.16 + slotState.strength * 0.84;
-            const nextWavePresence = 0.16 + nextSlotState.strength * 0.84;
+            const wavePresence = clamp(
+              0.12 + slotState.strength * 0.36 + slotState.intensity * 0.52,
+            );
+            const nextWavePresence = clamp(
+              0.12 +
+                nextSlotState.strength * 0.36 +
+                nextSlotState.intensity * 0.52,
+            );
             const spokeOuterEdge =
               spokeInnerRadius +
               slotState.height * (segmentLength + segmentGap) +
@@ -614,15 +643,24 @@ export function RadarCanvas({
               spokeInnerRadius +
               nextSlotState.height * (segmentLength + segmentGap) +
               segmentLength;
-            const contourLift = radius * (0.01 + waveEnvelope * 0.012);
+            const contourLift =
+              radius *
+              (0.008 +
+                waveEnvelope * 0.01 +
+                slotState.intensity * 0.03);
             const nextContourLift =
-              radius * (0.01 + nextWaveEnvelope * 0.012);
+              radius *
+              (0.008 +
+                nextWaveEnvelope * 0.01 +
+                nextSlotState.intensity * 0.03);
             const waveRipple =
               currentReduceAnimations
                 ? 0
                 : Math.sin(theta * 3 + ambientPhase * 1.08 + layer * 0.72) *
                     radius *
-                    (0.008 + waveEnvelope * 0.01) +
+                    (0.006 +
+                      waveEnvelope * 0.007 +
+                      slotState.intensity * 0.012) +
                   Math.sin(theta * 6 - ambientPhase * 0.65 + layer * 0.38) *
                     radius *
                     0.0035;
@@ -633,7 +671,9 @@ export function RadarCanvas({
                     nextTheta * 3 + ambientPhase * 1.08 + layer * 0.72,
                   ) *
                     radius *
-                    (0.008 + nextWaveEnvelope * 0.01) +
+                    (0.006 +
+                      nextWaveEnvelope * 0.007 +
+                      nextSlotState.intensity * 0.012) +
                   Math.sin(
                     nextTheta * 6 - ambientPhase * 0.65 + layer * 0.38,
                   ) *
@@ -651,6 +691,7 @@ export function RadarCanvas({
               minimumWaveRadius,
               spokeOuterEdge +
                 waveOuterOffset +
+                radius * slotState.intensity * 0.035 +
                 contourLift +
                 layer * waveLayerGap +
                 waveRipple,
@@ -659,6 +700,7 @@ export function RadarCanvas({
               nextMinimumWaveRadius,
               nextSpokeOuterEdge +
                 waveOuterOffset +
+                radius * nextSlotState.intensity * 0.035 +
                 nextContourLift +
                 layer * waveLayerGap +
                 nextWaveRipple,
@@ -682,7 +724,8 @@ export function RadarCanvas({
             context.strokeStyle = mixWaveColor(currentSounds, angleDegrees, now);
             context.globalAlpha =
               0.12 +
-              slotState.strength * 0.16 -
+              slotState.strength * 0.08 +
+              slotState.intensity * 0.14 -
               layer * 0.02;
             context.lineWidth = currentHighContrast ? 2.1 - layer * 0.18 : 1.55 - layer * 0.12;
             context.stroke();
