@@ -17,12 +17,13 @@ HOST = os.getenv("SIXTHSENSE_HOST", "0.0.0.0")
 PORT = int(os.getenv("SIXTHSENSE_PORT", "8000"))
 WS_PATH = "/ws/audio-stream"
 
-DEVICE_INDEX = int(os.getenv("SIXTHSENSE_DEVICE_INDEX", "6"))
+DEVICE_INDEX = int(os.getenv("SIXTHSENSE_DEVICE_INDEX", "7"))
 SAMPLE_RATE = int(os.getenv("SIXTHSENSE_SAMPLE_RATE", "44100"))
 DURATION = float(os.getenv("SIXTHSENSE_CHUNK_DURATION", "0.5"))
 THRESHOLD = float(os.getenv("SIXTHSENSE_SOUND_THRESHOLD", "0.80"))
 MIN_DELAY_SAMPLES = int(os.getenv("SIXTHSENSE_MIN_DELAY_SAMPLES", "5"))
 SILENCE_TIMEOUT_MS = int(os.getenv("SIXTHSENSE_SILENCE_TIMEOUT_MS", "1200"))
+LEFT_CHANNEL_GAIN = float(os.getenv("SIXTHSENSE_LEFT_CHANNEL_GAIN", "3"))
 SOUND_ID = "microphone-primary"
 SOUND_LABEL = "unknown"
 
@@ -45,11 +46,11 @@ def get_channel_peaks(audio: np.ndarray) -> tuple[float, float, float] | tuple[f
     """Get peak amplitude for each channel separately with normalization multipliers.
     
     Channel order: left (0), right (1), center (2)
-    Applies normalization: left * 2.367, right * 6.055
+    Applies normalization: left * 2.367 * LEFT_CHANNEL_GAIN, right * 6.055
     Returns (left, right, center) for 3 channels or (left, right) for 2 channels.
     """
     # Normalization multipliers
-    LEFT_MULTIPLIER = 2.367
+    LEFT_MULTIPLIER = 2.367 * LEFT_CHANNEL_GAIN
     RIGHT_MULTIPLIER = 6.055
     
     left_peak = float(np.max(np.abs(audio[:, 0]))) * LEFT_MULTIPLIER
@@ -62,6 +63,24 @@ def get_channel_peaks(audio: np.ndarray) -> tuple[float, float, float] | tuple[f
     else:
         right_peak = float(np.max(np.abs(audio[:, 1]))) * RIGHT_MULTIPLIER
         return left_peak, right_peak
+
+
+def get_channel_peak_map(audio: np.ndarray) -> dict[str, float]:
+    peaks = get_channel_peaks(audio)
+
+    if len(peaks) == 3:
+        left_peak, right_peak, center_peak = peaks
+        return {
+            "left": left_peak,
+            "right": right_peak,
+            "center": center_peak,
+        }
+
+    left_peak, right_peak = peaks
+    return {
+        "left": left_peak,
+        "right": right_peak,
+    }
 
 
 def balance_channels(channels: tuple[float, ...]) -> float:
@@ -244,8 +263,10 @@ class AudioStreamWorker:
 
             # Balance channel sensitivities
             channel_peaks = get_channel_peaks(audio)
+            channel_peak_map = get_channel_peak_map(audio)
             volume = balance_channels(channel_peaks)
             channel_intensities = get_channel_intensities(audio)
+            direction, delay_time = detect_direction(audio, SAMPLE_RATE)
             now = int(time.time() * 1000)
 
             # Print channel volumes and peaks
@@ -254,11 +275,22 @@ class AudioStreamWorker:
             else:
                 print(f"Left: {channel_peaks[0]:.4f} ({channel_intensities.get('left', 0):.2f}) | Right: {channel_peaks[1]:.4f} ({channel_intensities.get('right', 0):.2f})")
 
+            self.publish(
+                {
+                    "type": "channel_snapshot",
+                    "snapshot": {
+                        "direction": direction,
+                        "channelPeaks": channel_peak_map,
+                        "channelIntensities": channel_intensities,
+                        "detectedAt": now,
+                    },
+                },
+            )
+
             if volume > THRESHOLD:
                 if not is_sound_active or sound_started_at is None:
                     sound_started_at = now
 
-                direction, delay_time = detect_direction(audio, SAMPLE_RATE)
                 intensity = volume_to_intensity(volume)
                 
                 # Only process sound if intensity is above 0.8
@@ -279,6 +311,7 @@ class AudioStreamWorker:
                             "startedAt": sound_started_at,
                             "lastSeenAt": now,
                             "isActive": True,
+                            "channelPeaks": channel_peak_map,
                             "channelIntensities": channel_intensities,
                         },
                     },

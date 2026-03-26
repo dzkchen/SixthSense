@@ -1,5 +1,24 @@
 export type SoundLabel = "voice" | "vehicle" | "alarm" | "unknown";
 
+export type ChannelIntensities = {
+    left?: number;
+    center?: number;
+    right?: number;
+};
+
+export type ChannelPeaks = {
+    left?: number;
+    center?: number;
+    right?: number;
+};
+
+export type ChannelSnapshot = {
+    direction: number;
+    channelPeaks: ChannelPeaks;
+    channelIntensities: ChannelIntensities;
+    detectedAt: number;
+};
+
 export type SoundEvent = {
     id: string;
     direction: number;
@@ -8,7 +27,8 @@ export type SoundEvent = {
     startedAt: number;
     lastSeenAt: number;
     isActive: boolean;
-    channelIntensities?: Record<string, number>;
+    channelPeaks?: ChannelPeaks;
+    channelIntensities?: ChannelIntensities;
 };
 
 export type ConnectionStatus = "live" | "manual";
@@ -23,4 +43,12 @@ export type SoundEndMessage = {
     id: string;
 };
 
-export type SoundMessage = SoundUpdateMessage | SoundEndMessage;
+export type ChannelSnapshotMessage = {
+    type: "channel_snapshot";
+    snapshot: ChannelSnapshot;
+};
+
+export type SoundMessage =
+    | SoundUpdateMessage
+    | SoundEndMessage
+    | ChannelSnapshotMessage;

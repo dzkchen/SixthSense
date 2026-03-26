@@ -9,13 +9,18 @@ import {
 } from "react";
 
 import { useSoundStream } from "@/hooks/useSoundStream";
-import type { ConnectionStatus, SoundEvent } from "@/types/sound";
+import type {
+    ChannelSnapshot,
+    ConnectionStatus,
+    SoundEvent,
+} from "@/types/sound";
 
 type SoundContextValue = {
     sounds: SoundEvent[];
     history: SoundEvent[];
     connectionStatus: ConnectionStatus;
     totalIntensity: number;
+    latestChannelSnapshot: ChannelSnapshot | null;
     websocketUrl: string;
     isPaused: boolean;
     setIsPaused: (value: boolean) => void;

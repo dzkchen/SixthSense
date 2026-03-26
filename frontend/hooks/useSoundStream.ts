@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveAudioWebSocketUrl } from "@/lib/audioWebSocketUrl";
 import type {
+    ChannelSnapshot,
+    ChannelSnapshotMessage,
     ConnectionStatus,
     SoundEndMessage,
     SoundEvent,
@@ -28,6 +30,7 @@ type UseSoundStreamResult = {
     connectionStatus: ConnectionStatus;
     totalIntensity: number;
     history: SoundEvent[];
+    latestChannelSnapshot: ChannelSnapshot | null;
     websocketUrl: string;
     triggerManualDirection: (direction: number) => void;
     isDemoMode: boolean;
@@ -97,7 +100,11 @@ function getLatestBufferedMessages(buffer: SoundMessage[]) {
 
     for (const message of buffer) {
         const id =
-            message.type === "sound_update" ? message.sound.id : message.id;
+            message.type === "sound_update"
+                ? message.sound.id
+                : message.type === "sound_end"
+                  ? message.id
+                  : "channel_snapshot";
         latestById.set(id, message);
     }
 
@@ -109,6 +116,8 @@ export function useSoundStream({
 }: UseSoundStreamOptions): UseSoundStreamResult {
     const [sounds, setSounds] = useState<SoundEvent[]>([]);
     const [history, setHistory] = useState<SoundEvent[]>([]);
+    const [latestChannelSnapshot, setLatestChannelSnapshot] =
+        useState<ChannelSnapshot | null>(null);
     const [connectionStatus, setConnectionStatus] =
         useState<ConnectionStatus>("manual");
     const [isDemoMode, setIsDemoMode] = useState(false);
@@ -154,6 +163,13 @@ export function useSoundStream({
         [syncSounds],
     );
 
+    const processChannelSnapshot = useCallback(
+        (message: ChannelSnapshotMessage) => {
+            setLatestChannelSnapshot(message.snapshot);
+        },
+        [],
+    );
+
     const processMessage = useCallback(
         (message: SoundMessage) => {
             if (pausedRef.current) {
@@ -166,9 +182,14 @@ export function useSoundStream({
                 return;
             }
 
+            if (message.type === "channel_snapshot") {
+                processChannelSnapshot(message);
+                return;
+            }
+
             processEnd(message);
         },
-        [processEnd, processUpdate],
+        [processChannelSnapshot, processEnd, processUpdate],
     );
 
     useEffect(() => {
@@ -194,7 +215,6 @@ export function useSoundStream({
             right: "demo-right-channel",
         };
 
-        let demoIntervalId: number;
         let demoPhase = 0;
 
         const runDemoSequence = () => {
@@ -250,8 +270,7 @@ export function useSoundStream({
             }
         };
 
-        demoIntervalId = window.setInterval(runDemoSequence, 2000);
-        setConnectionStatus("live");
+        const demoIntervalId = window.setInterval(runDemoSequence, 2000);
 
         return () => {
             window.clearInterval(demoIntervalId);
@@ -398,9 +417,10 @@ export function useSoundStream({
 
     return {
         sounds,
-        connectionStatus,
+        connectionStatus: isDemoMode ? "live" : connectionStatus,
         totalIntensity,
         history,
+        latestChannelSnapshot,
         websocketUrl,
         triggerManualDirection,
         isDemoMode,
