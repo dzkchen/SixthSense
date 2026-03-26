@@ -50,10 +50,10 @@ def get_channel_peaks(audio: np.ndarray) -> tuple[float, float, float] | tuple[f
     Returns (left, right, center) for 3 channels or (left, right) for 2 channels.
     """
     # Normalization multipliers
-    LEFT_MULTIPLIER = 2.367 * LEFT_CHANNEL_GAIN
-    RIGHT_MULTIPLIER = 6.055
+    LEFT_MULTIPLIER = LEFT_CHANNEL_GAIN / 2
+    RIGHT_MULTIPLIER = 6.055 * 20
     
-    left_peak = float(np.max(np.abs(audio[:, 0]))) * LEFT_MULTIPLIER
+    left_peak = (float(np.max(np.abs(audio[:, 0]))) * LEFT_MULTIPLIER) / 6
     
     # Handle both stereo (2 channels) and tri-channel audio
     if audio.shape[1] >= 3:

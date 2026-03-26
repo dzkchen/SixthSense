@@ -4,7 +4,7 @@ import numpy as np
 # ===== CONFIG =====
 DEVICE_INDEX = 8        # Your "3 Mics" aggregate device
 SAMPLE_RATE = 44100     # Standard sample rate
-DURATION = 0.5          # Seconds per recording
+DURATION = 0.1    # Seconds per recording
 THRESHOLD = 0.001        # Minimum volume to consider a sound
 
 # ==================
