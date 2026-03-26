@@ -269,11 +269,23 @@ class AudioStreamWorker:
             direction, delay_time = detect_direction(audio, SAMPLE_RATE)
             now = int(time.time() * 1000)
 
-            # Print channel volumes and peaks
             if len(channel_peaks) == 3:
-                print(f"Left: {channel_peaks[0]:.4f} ({channel_intensities.get('left', 0):.2f}) | Right: {channel_peaks[1]:.4f} ({channel_intensities.get('right', 0):.2f}) | Center: {channel_peaks[2]:.4f} ({channel_intensities.get('center', 0):.2f})")
+                print(
+                    "Peaks"
+                    f" L={channel_peaks[0]:.4f} R={channel_peaks[1]:.4f} C={channel_peaks[2]:.4f}"
+                    " | Intensities"
+                    f" L={channel_intensities.get('left', 0):.2f}"
+                    f" R={channel_intensities.get('right', 0):.2f}"
+                    f" C={channel_intensities.get('center', 0):.2f}"
+                )
             else:
-                print(f"Left: {channel_peaks[0]:.4f} ({channel_intensities.get('left', 0):.2f}) | Right: {channel_peaks[1]:.4f} ({channel_intensities.get('right', 0):.2f})")
+                print(
+                    "Peaks"
+                    f" L={channel_peaks[0]:.4f} R={channel_peaks[1]:.4f}"
+                    " | Intensities"
+                    f" L={channel_intensities.get('left', 0):.2f}"
+                    f" R={channel_intensities.get('right', 0):.2f}"
+                )
 
             self.publish(
                 {
@@ -323,7 +335,6 @@ class AudioStreamWorker:
                 and last_detected_at is not None
                 and now - last_detected_at >= SILENCE_TIMEOUT_MS
             ):
-                print("sound_end")
                 self.publish({"type": "sound_end", "id": SOUND_ID})
                 is_sound_active = False
                 sound_started_at = None

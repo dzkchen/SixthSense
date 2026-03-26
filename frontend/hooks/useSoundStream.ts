@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { resolveAudioWebSocketUrl } from "@/lib/audioWebSocketUrl";
+import { resolveAudioWebSocketUrls } from "@/lib/audioWebSocketUrl";
 import type {
     ChannelSnapshot,
     ChannelSnapshotMessage,
@@ -121,7 +121,7 @@ export function useSoundStream({
     const [connectionStatus, setConnectionStatus] =
         useState<ConnectionStatus>("manual");
     const [isDemoMode, setIsDemoMode] = useState(false);
-    const websocketUrl = useMemo(() => resolveAudioWebSocketUrl(), []);
+    const [websocketUrl, setWebsocketUrl] = useState("");
 
     const pausedRef = useRef(isPaused);
     const wsRef = useRef<WebSocket | null>(null);
@@ -281,51 +281,117 @@ export function useSoundStream({
     }, [isDemoMode, processMessage]);
 
     useEffect(() => {
-        let websocket: WebSocket;
+        const websocketCandidates = resolveAudioWebSocketUrls();
 
-        try {
-            websocket = new WebSocket(websocketUrl);
-        } catch {
+        if (websocketCandidates.length === 0) {
             return;
         }
 
-        wsRef.current = websocket;
+        let activeSocket: WebSocket | null = null;
+        let connectionTimer: number | null = null;
+        let candidateIndex = 0;
+        let isDisposed = false;
+        let hasConnected = false;
 
-        let didResolveConnection = false;
-
-        const fallbackToManual = window.setTimeout(() => {
-            if (!didResolveConnection) {
-                setConnectionStatus("manual");
-                websocket.close();
+        const clearTimer = () => {
+            if (connectionTimer !== null) {
+                window.clearTimeout(connectionTimer);
+                connectionTimer = null;
             }
-        }, WEBSOCKET_TIMEOUT_MS);
+        };
 
-        websocket.addEventListener("open", () => {
-            didResolveConnection = true;
-            window.clearTimeout(fallbackToManual);
-            setConnectionStatus("live");
-        });
+        const cleanupSocket = () => {
+            if (activeSocket) {
+                activeSocket.onopen = null;
+                activeSocket.onmessage = null;
+                activeSocket.onerror = null;
+                activeSocket.onclose = null;
+                activeSocket.close();
+                activeSocket = null;
+            }
+            wsRef.current = null;
+        };
 
-        websocket.addEventListener("message", (event) => {
-            const message = JSON.parse(event.data) as SoundMessage;
-            processMessage(message);
-        });
+        const tryNextCandidate = () => {
+            if (isDisposed) {
+                return;
+            }
 
-        websocket.addEventListener("error", () => {
-            window.clearTimeout(fallbackToManual);
-            setConnectionStatus("manual");
-        });
+            clearTimer();
+            cleanupSocket();
 
-        websocket.addEventListener("close", () => {
-            window.clearTimeout(fallbackToManual);
-            setConnectionStatus("manual");
-        });
+            const nextUrl = websocketCandidates[candidateIndex];
+
+            if (!nextUrl) {
+                setConnectionStatus("manual");
+                return;
+            }
+
+            setWebsocketUrl(nextUrl);
+
+            let websocket: WebSocket;
+            try {
+                websocket = new WebSocket(nextUrl);
+            } catch {
+                candidateIndex += 1;
+                tryNextCandidate();
+                return;
+            }
+
+            activeSocket = websocket;
+            wsRef.current = websocket;
+
+            connectionTimer = window.setTimeout(() => {
+                if (!hasConnected) {
+                    candidateIndex += 1;
+                    tryNextCandidate();
+                }
+            }, WEBSOCKET_TIMEOUT_MS);
+
+            websocket.onopen = () => {
+                hasConnected = true;
+                clearTimer();
+                setConnectionStatus("live");
+            };
+
+            websocket.onmessage = (event) => {
+                const message = JSON.parse(event.data) as SoundMessage;
+                processMessage(message);
+            };
+
+            websocket.onerror = () => {
+                if (isDisposed || hasConnected) {
+                    return;
+                }
+
+                candidateIndex += 1;
+                tryNextCandidate();
+            };
+
+            websocket.onclose = () => {
+                if (isDisposed) {
+                    return;
+                }
+
+                if (hasConnected) {
+                    clearTimer();
+                    setConnectionStatus("manual");
+                    return;
+                }
+
+                candidateIndex += 1;
+                tryNextCandidate();
+            };
+        };
+
+        tryNextCandidate();
 
         return () => {
-            window.clearTimeout(fallbackToManual);
-            websocket.close();
+            isDisposed = true;
+            clearTimer();
+            cleanupSocket();
         };
-    }, [processMessage, websocketUrl]);
+    }, [processMessage]);
 
     useEffect(() => {
         const intervalId = window.setInterval(() => {
